@@ -48,7 +48,8 @@ export default function Dashboard() {
         setEjerciciosBD(listaEjercicios);
         if (listaEjercicios.length > 0) setEjercicioSeleccionado(listaEjercicios[0]);
 
-        const snapRutinas = await getDocs(collection(db, "Usuarios", usuario.uid, "Rutinas"));
+        const qRutinas = query(collection(db, "Usuarios", usuario.uid, "Rutinas"), orderBy("nombre", "asc"));
+        const snapRutinas = await getDocs(qRutinas);
         setRutinasBD(snapRutinas.docs.map(d => ({ id: d.id, ...d.data() })));
 
       } catch (error) { console.error("Error obteniendo datos:", error); } 
