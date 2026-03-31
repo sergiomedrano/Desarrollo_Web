@@ -42,7 +42,7 @@ export default function Dashboard() {
           if (docSnap.exists() && docSnap.data().perfil) setPerfil(docSnap.data().perfil);
         }
 
-        // Cargar Ejercicios (ALFABÉTICAMENTE)
+        // Cargar Ejercicios
         const qEjercicios = query(collection(db, "Usuarios", usuario.uid, "Ejercicios"), orderBy("nombre", "asc"));
         const snapEjercicios = await getDocs(qEjercicios);
         const listaEjercicios = snapEjercicios.docs.map(d => d.data().nombre);
