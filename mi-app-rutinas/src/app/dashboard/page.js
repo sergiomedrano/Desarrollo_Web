@@ -42,7 +42,8 @@ export default function Dashboard() {
         }
 
         // Cargar Ejercicios y Rutinas (Necesarios para Hoy y Perfil)
-        const snapEjercicios = await getDocs(collection(db, "Usuarios", usuario.uid, "Ejercicios"));
+        const qEjercicios = query(collection(db, "Usuarios", usuario.uid, "Ejercicios"), orderBy("nombre", "asc"));
+        const snapEjercicios = await getDocs(qEjercicios);
         const listaEjercicios = snapEjercicios.docs.map(d => d.data().nombre);
         setEjerciciosBD(listaEjercicios);
         if (listaEjercicios.length > 0) setEjercicioSeleccionado(listaEjercicios[0]);
