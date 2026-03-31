@@ -33,16 +33,25 @@ function TrackerContenido() {
           // Lógica de Plantillas Automáticas
           const plantillas = {
             piernas: [
-              { id: "p1", ejercicio: "Sentadilla Búlgara", notas: "", series: [{ id: 1, kg: 0, reps: 0, completada: false }] },
-              { id: "p2", ejercicio: "Peso Muerto Rumano", notas: "", series: [{ id: 2, kg: 0, reps: 0, completada: false }] }
+              { id: "p1", ejercicio: "Peso Muerto Rumano", notas: "3 series 8-10 repes. 120 seg de descanso", series: [{ id: 1, kg: 0, reps: 0, completada: false }] },
+              { id: "p2", ejercicio: "Prensa Inclinada", notas: "3 series 8-12 repes. 90 seg de descanso", series: [{ id: 2, kg: 0, reps: 0, completada: false }] },
+              { id: "p3", ejercicio: "Seated leg curl", notas: "3 series 8-12 repes. 90 seg de descanso", series: [{ id: 3, kg: 0, reps: 0, completada: false }] },
+              { id: "p4", ejercicio: "Puente de glúteo con barra", notas: "3 series 8-10 repes. 120 seg de descanso", series: [{ id: 4, kg: 0, reps: 0, completada: false }] }
             ],
             torsoa: [
-              { id: "ta1", ejercicio: "Remo con Barra", notas: "", series: [{ id: 1, kg: 0, reps: 0, completada: false }] },
-              { id: "ta2", ejercicio: "Curl de Bíceps Banca 45°", notas: "", series: [{ id: 2, kg: 0, reps: 0, completada: false }] }
+              { id: "ta1", ejercicio: "Remo invertido en barra con rodillas extendidas", notas: "4 series x repes máximas. 120 seg de descanso", series: [{ id: 1, kg: 0, reps: 0, completada: false }] },
+              { id: "ta2", ejercicio: "Push up fase excéntrica acentuada", notas: "3 series x repes máximas. 120 seg de descanso", series: [{ id: 2, kg: 0, reps: 0, completada: false }] },
+              { id: "ta3", ejercicio: "Remo barra en pronación", notas: "3 series 8-10 repes. 120 seg de descanso", series: [{ id: 3, kg: 0, reps: 0, completada: false }] },
+              { id: "ta4", ejercicio: "Press hombro máquina", notas: "3 series 8-10 repes. 90 seg de descanso", series: [{ id: 4, kg: 0, reps: 0, completada: false }] },
+              { id: "ta5", ejercicio: "Curl de biceps banca 45°", notas: "3 series 8-12 repes. 90 seg de descanso", series: [{ id: 5, kg: 0, reps: 0, completada: false }] },
+              { id: "ta6", ejercicio: "Plate Seated Calf raise", notas: "3 series 8-10 repes. 60 seg de descanso", series: [{ id: 3, kg: 0, reps: 0, completada: false }] }
             ],
             torsob: [
-              { id: "tb1", ejercicio: "Press de Banca", notas: "", series: [{ id: 1, kg: 0, reps: 0, completada: false }] },
-              { id: "tb2", ejercicio: "Curl de Bíceps tipo Martillo", notas: "", series: [{ id: 2, kg: 0, reps: 0, completada: false }] }
+              { id: "tb1", ejercicio: "Press de Banca con barra", notas: "3 series 8-10 repes. 120 seg de descanso", series: [{ id: 1, kg: 0, reps: 0, completada: false }] },
+              { id: "tb2", ejercicio: "Remo unilateral polea media", notas: "3 series 8-10 repes. 90 seg de descanso", series: [{ id: 2, kg: 0, reps: 0, completada: false }] },
+              { id: "tb3", ejercicio: "Apertura pectoral polea alta", notas: "3 series 8-10 repes. 90 seg de descanso", series: [{ id: 3, kg: 0, reps: 0, completada: false }] },
+              { id: "tb4", ejercicio: "Extensión de triceps en polea tras nuca", notas: "3 series 8-12 repes. 90 seg de descanso", series: [{ id: 4, kg: 0, reps: 0, completada: false }] },
+              { id: "tb5", ejercicio: "Dual-Cable Rear Delt Fly", notas: "3 series 8-12 repes. 90 seg de descanso", series: [{ id: 5, kg: 0, reps: 0, completada: false }] }
             ]
           };
 
