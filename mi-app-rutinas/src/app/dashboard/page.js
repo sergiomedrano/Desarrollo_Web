@@ -1,14 +1,60 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { auth, db } from "../../firebase"; // Conexión a tu BD
+import { collection, query, orderBy, getDocs, limit } from "firebase/firestore";
 
 export default function Dashboard() {
-    const router = useRouter();
-  // Estado para controlar qué pestaña está activa
+  const router = useRouter();
   const [pestañaActiva, setPestañaActiva] = useState("hoy");
+  const [historial, setHistorial] = useState([]);
+  const [cargandoDatos, setCargandoDatos] = useState(true);
+
+  // Esta función busca tus últimos 5 entrenamientos en la nube
+  useEffect(() => {
+    const obtenerHistorial = async () => {
+      // Nos aseguramos de que haya un usuario conectado
+      const usuario = auth.currentUser;
+      if (!usuario) {
+        setCargandoDatos(false);
+        return;
+      }
+
+      try {
+        // Buscamos en la carpeta del usuario, ordenado por fecha más reciente
+        const q = query(
+          collection(db, "Usuarios", usuario.uid, "Sesiones"),
+          orderBy("fecha", "desc"),
+          limit(5)
+        );
+        
+        const resultados = await getDocs(q);
+        const sesiones = resultados.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        
+        setHistorial(sesiones);
+      } catch (error) {
+        console.error("Error obteniendo historial:", error);
+      } finally {
+        setCargandoDatos(false);
+      }
+    };
+
+    // Solo buscamos los datos si entramos a la pestaña de progreso
+    if (pestañaActiva === "progreso") {
+      obtenerHistorial();
+    }
+  }, [pestañaActiva]);
+
+  // Función para cerrar sesión
+  const cerrarSesion = async () => {
+    await auth.signOut();
+    router.push("/");
+  };
 
   return (
-    // pb-20 deja espacio abajo para que la barra de navegación no tape el contenido
     <main className="min-h-screen bg-gray-900 text-white pb-20 font-sans">
       
       {/* ---------------- PESTAÑA: HOY ---------------- */}
@@ -19,7 +65,6 @@ export default function Dashboard() {
             <p className="text-gray-400">Tu plan para hoy está listo.</p>
           </header>
 
-          {/* Tarjeta de Check de Creatina */}
           <div className="bg-gray-800 p-4 rounded-2xl flex items-center justify-between border border-gray-700">
             <div>
               <p className="font-semibold text-white">Suplementación diaria</p>
@@ -30,8 +75,7 @@ export default function Dashboard() {
             </button>
           </div>
 
-          {/* Tarjeta de Rutina Principal */}
-          <div className="from-gray-800 to-gray-900 p-6 rounded-3xl border border-gray-700 shadow-xl">
+          <div className="bg-gradient-to-br from-gray-800 to-gray-900 p-6 rounded-3xl border border-gray-700 shadow-xl">
             <span className="bg-emerald-500/20 text-emerald-400 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide">
               Bloque Sugerido
             </span>
@@ -40,10 +84,10 @@ export default function Dashboard() {
               Pecho, Hombro y Tríceps. Enfocado en progresión de cargas en Press Banca.
             </p>
             <button 
-                onClick={() => router.push('/tracker')}
-                className="w-full bg-emerald-500 text-gray-900 font-bold py-4 rounded-xl active:scale-95 transition-transform text-lg shadow-lg shadow-emerald-500/30 mt-6"
+              onClick={() => router.push('/tracker')}
+              className="w-full bg-emerald-500 text-gray-900 font-bold py-4 rounded-xl active:scale-95 transition-transform text-lg shadow-lg shadow-emerald-500/30"
             >
-                INICIAR SESIÓN ▶
+              INICIAR SESIÓN ▶
             </button>
           </div>
         </div>
@@ -52,45 +96,40 @@ export default function Dashboard() {
       {/* ---------------- PESTAÑA: PROGRESO ---------------- */}
       {pestañaActiva === "progreso" && (
         <div className="p-6 space-y-6 animate-fade-in">
-          <h2 className="text-2xl font-bold text-white mb-4">Tus Marcas</h2>
+          <h2 className="text-2xl font-bold text-white mb-4">Últimos Entrenamientos</h2>
           
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-gray-800 p-4 rounded-2xl border border-gray-700">
-              <p className="text-sm text-gray-400 mb-1">Press Banca</p>
-              <p className="text-2xl font-bold text-emerald-400">80 kg</p>
-              <p className="text-xs text-emerald-500 mt-2">↑ +2.5kg este mes</p>
+          {cargandoDatos ? (
+            <p className="text-gray-400 text-center py-10">Cargando tus marcas...</p>
+          ) : historial.length === 0 ? (
+            <p className="text-gray-400 text-center py-10">Aún no hay sesiones guardadas.</p>
+          ) : (
+            <div className="space-y-4">
+              {historial.map((sesion) => (
+                <div key={sesion.id} className="bg-gray-800 p-5 rounded-2xl border border-gray-700">
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <h3 className="font-bold text-lg text-emerald-400">{sesion.rutina}</h3>
+                      <p className="text-sm text-gray-400">{sesion.ejercicio_principal}</p>
+                    </div>
+                    {/* Formateamos la fecha si existe */}
+                    <span className="text-xs text-gray-500 bg-gray-900 px-2 py-1 rounded-md">
+                      {sesion.fecha ? new Date(sesion.fecha.toDate()).toLocaleDateString() : 'Hoy'}
+                    </span>
+                  </div>
+                  
+                  {/* Listamos las series que guardaste en esa sesión */}
+                  <div className="space-y-2 mt-4 pt-4 border-t border-gray-700/50">
+                    {sesion.historial_series && sesion.historial_series.map((serie, idx) => (
+                      <div key={idx} className="flex justify-between text-sm">
+                        <span className="text-gray-400">Serie {idx + 1}</span>
+                        <span className="font-bold">{serie.kg} kg × {serie.reps} reps</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
-            <div className="bg-gray-800 p-4 rounded-2xl border border-gray-700">
-              <p className="text-sm text-gray-400 mb-1">Sentadilla</p>
-              <p className="text-2xl font-bold text-emerald-400">100 kg</p>
-              <p className="text-xs text-gray-500 mt-2">Manteniendo</p>
-            </div>
-          </div>
-
-          {/* Simulación visual de recomposición */}
-          <div className="bg-gray-800 p-5 rounded-2xl border border-gray-700 mt-6">
-            <h3 className="font-semibold mb-4">Evolución Corporal</h3>
-            <div className="space-y-3">
-              <div>
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="text-emerald-400">Masa Muscular</span>
-                  <span>↗</span>
-                </div>
-                <div className="w-full bg-gray-700 rounded-full h-2">
-                  <div className="bg-emerald-500 h-2 rounded-full w-2/3"></div>
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="text-blue-400">Grasa Corporal</span>
-                  <span>↘</span>
-                </div>
-                <div className="w-full bg-gray-700 rounded-full h-2">
-                  <div className="bg-blue-400 h-2 rounded-full w-1/3"></div>
-                </div>
-              </div>
-            </div>
-          </div>
+          )}
         </div>
       )}
 
@@ -127,34 +166,26 @@ export default function Dashboard() {
             </div>
           </div>
           
-          <button className="w-full text-red-400 font-bold py-3 mt-4 hover:bg-red-400/10 rounded-xl transition-colors">
+          <button 
+            onClick={cerrarSesion}
+            className="w-full text-red-400 font-bold py-3 mt-4 hover:bg-red-400/10 rounded-xl transition-colors"
+          >
             Cerrar Sesión
           </button>
         </div>
       )}
 
-      {/* ---------------- NAVEGACIÓN INFERIOR (BOTTOM BAR) ---------------- */}
-      <nav className="fixed bottom-0 w-full bg-gray-900 border-t border-gray-800 flex justify-around p-3 pb-6">
-        <button 
-          onClick={() => setPestañaActiva("hoy")}
-          className={`flex flex-col items-center gap-1 p-2 w-20 transition-colors ${pestañaActiva === "hoy" ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"}`}
-        >
+      {/* ---------------- NAVEGACIÓN INFERIOR ---------------- */}
+      <nav className="fixed bottom-0 w-full bg-gray-900 border-t border-gray-800 flex justify-around p-3 pb-6 z-50">
+        <button onClick={() => setPestañaActiva("hoy")} className={`flex flex-col items-center gap-1 p-2 w-20 transition-colors ${pestañaActiva === "hoy" ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"}`}>
           <span className="text-2xl">🔥</span>
           <span className="text-[10px] font-bold uppercase tracking-wider">Hoy</span>
         </button>
-        
-        <button 
-          onClick={() => setPestañaActiva("progreso")}
-          className={`flex flex-col items-center gap-1 p-2 w-20 transition-colors ${pestañaActiva === "progreso" ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"}`}
-        >
+        <button onClick={() => setPestañaActiva("progreso")} className={`flex flex-col items-center gap-1 p-2 w-20 transition-colors ${pestañaActiva === "progreso" ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"}`}>
           <span className="text-2xl">📈</span>
           <span className="text-[10px] font-bold uppercase tracking-wider">Progreso</span>
         </button>
-
-        <button 
-          onClick={() => setPestañaActiva("perfil")}
-          className={`flex flex-col items-center gap-1 p-2 w-20 transition-colors ${pestañaActiva === "perfil" ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"}`}
-        >
+        <button onClick={() => setPestañaActiva("perfil")} className={`flex flex-col items-center gap-1 p-2 w-20 transition-colors ${pestañaActiva === "perfil" ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"}`}>
           <span className="text-2xl">⚙️</span>
           <span className="text-[10px] font-bold uppercase tracking-wider">Perfil</span>
         </button>
