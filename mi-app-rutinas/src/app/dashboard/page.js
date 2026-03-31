@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { auth, db } from "../../firebase"; 
-import { collection, query, orderBy, getDocs, limit } from "firebase/firestore";
+import { collection, query, orderBy, getDocs, limit, doc, getDoc, setDoc } from "firebase/firestore";
 
 export default function Dashboard() {
   const router = useRouter();
@@ -10,8 +10,17 @@ export default function Dashboard() {
   const [historial, setHistorial] = useState([]);
   const [cargandoDatos, setCargandoDatos] = useState(true);
 
+  // --- NUEVOS ESTADOS PARA EL PERFIL ---
+  const [perfil, setPerfil] = useState({
+    estatura: "176",
+    peso: "96",
+    objetivo: "Recomposición"
+  });
+  const [editandoPerfil, setEditandoPerfil] = useState(false);
+  const [guardandoPerfil, setGuardandoPerfil] = useState(false);
+
   useEffect(() => {
-    const obtenerHistorial = async () => {
+    const obtenerDatos = async () => {
       const usuario = auth.currentUser;
       if (!usuario) {
         setCargandoDatos(false);
@@ -19,30 +28,55 @@ export default function Dashboard() {
       }
 
       try {
-        const q = query(
-          collection(db, "Usuarios", usuario.uid, "Sesiones"),
-          orderBy("fecha", "desc"),
-          limit(5)
-        );
-        
-        const resultados = await getDocs(q);
-        const sesiones = resultados.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        
-        setHistorial(sesiones);
+        // 1. Cargar Historial (Pestaña Progreso)
+        if (pestañaActiva === "progreso") {
+          const q = query(
+            collection(db, "Usuarios", usuario.uid, "Sesiones"),
+            orderBy("fecha", "desc"),
+            limit(5)
+          );
+          const resultados = await getDocs(q);
+          setHistorial(resultados.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        }
+
+        // 2. Cargar Perfil Dinámico (Pestaña Perfil)
+        if (pestañaActiva === "perfil") {
+          const docRef = doc(db, "Usuarios", usuario.uid);
+          const docSnap = await getDoc(docRef);
+          
+          if (docSnap.exists() && docSnap.data().perfil) {
+            setPerfil(docSnap.data().perfil);
+          }
+        }
       } catch (error) {
-        console.error("Error obteniendo historial:", error);
+        console.error("Error obteniendo datos:", error);
       } finally {
         setCargandoDatos(false);
       }
     };
 
-    if (pestañaActiva === "progreso") {
-      obtenerHistorial();
-    }
+    obtenerDatos();
   }, [pestañaActiva]);
+
+  // --- NUEVA FUNCIÓN: Guardar Perfil en Firebase ---
+  const guardarPerfil = async () => {
+    const usuario = auth.currentUser;
+    if (!usuario) return;
+
+    setGuardandoPerfil(true);
+    try {
+      const docRef = doc(db, "Usuarios", usuario.uid);
+      // Usamos merge: true para no borrar otras cosas que el usuario pueda tener
+      await setDoc(docRef, { perfil: perfil }, { merge: true });
+      setEditandoPerfil(false);
+      alert("¡Perfil actualizado con éxito! 🚀");
+    } catch (error) {
+      console.error("Error al guardar perfil:", error);
+      alert("Hubo un error al guardar tu perfil.");
+    } finally {
+      setGuardandoPerfil(false);
+    }
+  };
 
   const cerrarSesion = async () => {
     await auth.signOut();
@@ -88,7 +122,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ---------------- PESTAÑA: PROGRESO (ACTUALIZADA) ---------------- */}
+      {/* ---------------- PESTAÑA: PROGRESO ---------------- */}
       {pestañaActiva === "progreso" && (
         <div className="p-6 space-y-6 animate-fade-in">
           <h2 className="text-2xl font-bold text-white mb-4">Últimos Entrenamientos</h2>
@@ -108,7 +142,6 @@ export default function Dashboard() {
                     </span>
                   </div>
                   
-                  {/* Lógica para mostrar múltiples ejercicios de la NUEVA estructura */}
                   {sesion.ejercicios_realizados ? (
                     <div className="space-y-5">
                       {sesion.ejercicios_realizados.map((bloque, idxBloque) => (
@@ -129,7 +162,6 @@ export default function Dashboard() {
                       ))}
                     </div>
                   ) : (
-                    // Lógica de respaldo para mostrar la estructura VIEJA (1 solo ejercicio)
                     <div className="space-y-2 mt-2">
                       <p className="text-sm font-bold text-gray-200 mb-2 flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
@@ -145,7 +177,6 @@ export default function Dashboard() {
                       </div>
                     </div>
                   )}
-
                 </div>
               ))}
             </div>
@@ -153,25 +184,89 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ---------------- PESTAÑA: PERFIL ---------------- */}
+      {/* ---------------- PESTAÑA: PERFIL (ACTUALIZADA) ---------------- */}
       {pestañaActiva === "perfil" && (
         <div className="p-6 space-y-6 animate-fade-in">
-          <h2 className="text-2xl font-bold text-white mb-4">Mi Perfil</h2>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-2xl font-bold text-white">Mi Perfil</h2>
+            
+            {/* Botón para alternar modo edición */}
+            {!editandoPerfil ? (
+              <button 
+                onClick={() => setEditandoPerfil(true)}
+                className="text-emerald-400 text-sm font-bold px-3 py-1 bg-emerald-400/10 rounded-lg hover:bg-emerald-400/20 transition-colors"
+              >
+                Editar
+              </button>
+            ) : (
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => setEditandoPerfil(false)}
+                  className="text-gray-400 text-sm font-bold px-3 py-1 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={guardarPerfil}
+                  disabled={guardandoPerfil}
+                  className="text-gray-900 text-sm font-bold px-3 py-1 bg-emerald-500 rounded-lg hover:bg-emerald-400 transition-colors disabled:opacity-50"
+                >
+                  {guardandoPerfil ? "..." : "Guardar"}
+                </button>
+              </div>
+            )}
+          </div>
           
           <div className="bg-gray-800 p-5 rounded-2xl border border-gray-700">
             <h3 className="text-sm uppercase text-gray-400 font-bold mb-4 tracking-wider">Métricas Actuales</h3>
             <div className="space-y-4">
+              
               <div className="flex justify-between items-center border-b border-gray-700 pb-3">
                 <span className="text-gray-300">Estatura</span>
-                <span className="font-bold text-white">176 cm</span>
+                {editandoPerfil ? (
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="number" 
+                      value={perfil.estatura} 
+                      onChange={(e) => setPerfil({...perfil, estatura: e.target.value})}
+                      className="w-20 bg-gray-900 text-white text-right font-bold rounded-lg py-1 px-2 outline-none focus:ring-1 focus:ring-emerald-500"
+                    />
+                    <span className="text-gray-500 text-sm">cm</span>
+                  </div>
+                ) : (
+                  <span className="font-bold text-white">{perfil.estatura} cm</span>
+                )}
               </div>
+
               <div className="flex justify-between items-center border-b border-gray-700 pb-3">
                 <span className="text-gray-300">Peso Base</span>
-                <span className="font-bold text-white">96 kg</span>
+                {editandoPerfil ? (
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="number" 
+                      value={perfil.peso} 
+                      onChange={(e) => setPerfil({...perfil, peso: e.target.value})}
+                      className="w-20 bg-gray-900 text-white text-right font-bold rounded-lg py-1 px-2 outline-none focus:ring-1 focus:ring-emerald-500"
+                    />
+                    <span className="text-gray-500 text-sm">kg</span>
+                  </div>
+                ) : (
+                  <span className="font-bold text-white">{perfil.peso} kg</span>
+                )}
               </div>
+
               <div className="flex justify-between items-center">
                 <span className="text-gray-300">Objetivo Principal</span>
-                <span className="font-bold text-emerald-400">Recomposición</span>
+                {editandoPerfil ? (
+                  <input 
+                    type="text" 
+                    value={perfil.objetivo} 
+                    onChange={(e) => setPerfil({...perfil, objetivo: e.target.value})}
+                    className="w-40 bg-gray-900 text-emerald-400 text-right font-bold rounded-lg py-1 px-2 outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                ) : (
+                  <span className="font-bold text-emerald-400">{perfil.objetivo}</span>
+                )}
               </div>
             </div>
           </div>
