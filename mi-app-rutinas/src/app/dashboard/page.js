@@ -99,14 +99,43 @@ export default function Dashboard() {
         <div className="p-6 space-y-6 animate-fade-in">
           <header>
             <h1 className="text-3xl font-bold text-emerald-400">¡A darle duro!</h1>
-            <p className="text-gray-400">Tu plan para hoy está listo.</p>
+            <p className="text-gray-400">Selecciona tu bloque de hoy.</p>
           </header>
-          <div className="bg-gradient-to-br from-gray-800 to-gray-900 p-6 rounded-3xl border border-gray-700 shadow-xl mt-6">
-            <span className="bg-emerald-500/20 text-emerald-400 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide">Bloque Sugerido</span>
-            <h2 className="text-2xl font-bold mt-4 mb-2">Entrenamiento Libre</h2>
-            <p className="text-gray-400 mb-6 text-sm">Selecciona tus ejercicios y registra tus marcas del día.</p>
-            <button onClick={() => router.push('/tracker')} className="w-full bg-emerald-500 text-gray-900 font-bold py-4 rounded-xl active:scale-95 transition-transform text-lg shadow-lg">
-              INICIAR SESIÓN ▶
+
+          <div className="grid grid-cols-1 gap-4 mt-6">
+            {/* Plantilla 1: Piernas */}
+            <button 
+              onClick={() => router.push('/tracker?plan=piernas')}
+              className="bg-gradient-to-r from-gray-800 to-gray-900 p-5 rounded-3xl border border-gray-700 shadow-lg text-left hover:border-emerald-500 transition-colors"
+            >
+              <h3 className="text-xl font-bold text-emerald-400">Día 1: Piernas</h3>
+              <p className="text-sm text-gray-400 mt-1">Enfoque Unilateral (Sentadilla Búlgara, PMR...)</p>
+            </button>
+
+            {/* Plantilla 2: Torso A */}
+            <button 
+              onClick={() => router.push('/tracker?plan=torsoa')}
+              className="bg-gradient-to-r from-gray-800 to-gray-900 p-5 rounded-3xl border border-gray-700 shadow-lg text-left hover:border-emerald-500 transition-colors"
+            >
+              <h3 className="text-xl font-bold text-emerald-400">Día 2: Torso A</h3>
+              <p className="text-sm text-gray-400 mt-1">Tracción / Empuje (Remo con Barra, Curl 45°...)</p>
+            </button>
+
+            {/* Plantilla 3: Torso B */}
+            <button 
+              onClick={() => router.push('/tracker?plan=torsob')}
+              className="bg-gradient-to-r from-gray-800 to-gray-900 p-5 rounded-3xl border border-gray-700 shadow-lg text-left hover:border-emerald-500 transition-colors"
+            >
+              <h3 className="text-xl font-bold text-emerald-400">Día 3: Torso B</h3>
+              <p className="text-sm text-gray-400 mt-1">Empuje / Tracción (Press Banca, Curl Martillo...)</p>
+            </button>
+
+            {/* Entrenamiento Libre */}
+            <button 
+              onClick={() => router.push('/tracker')}
+              className="mt-4 w-full py-4 border-2 border-dashed border-gray-700 text-gray-400 font-bold rounded-2xl hover:border-gray-500 transition-colors"
+            >
+              + Entrenamiento Libre
             </button>
           </div>
         </div>
