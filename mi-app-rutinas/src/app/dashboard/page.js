@@ -1,0 +1,165 @@
+"use client";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+
+export default function Dashboard() {
+    const router = useRouter();
+  // Estado para controlar qué pestaña está activa
+  const [pestañaActiva, setPestañaActiva] = useState("hoy");
+
+  return (
+    // pb-20 deja espacio abajo para que la barra de navegación no tape el contenido
+    <main className="min-h-screen bg-gray-900 text-white pb-20 font-sans">
+      
+      {/* ---------------- PESTAÑA: HOY ---------------- */}
+      {pestañaActiva === "hoy" && (
+        <div className="p-6 space-y-6 animate-fade-in">
+          <header>
+            <h1 className="text-3xl font-bold text-emerald-400">¡A darle duro!</h1>
+            <p className="text-gray-400">Tu plan para hoy está listo.</p>
+          </header>
+
+          {/* Tarjeta de Check de Creatina */}
+          <div className="bg-gray-800 p-4 rounded-2xl flex items-center justify-between border border-gray-700">
+            <div>
+              <p className="font-semibold text-white">Suplementación diaria</p>
+              <p className="text-sm text-gray-400">5g de Creatina Monohidrato</p>
+            </div>
+            <button className="w-10 h-10 rounded-full border-2 border-emerald-500 flex items-center justify-center hover:bg-emerald-500 hover:text-white transition-colors">
+              ✓
+            </button>
+          </div>
+
+          {/* Tarjeta de Rutina Principal */}
+          <div className="from-gray-800 to-gray-900 p-6 rounded-3xl border border-gray-700 shadow-xl">
+            <span className="bg-emerald-500/20 text-emerald-400 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide">
+              Bloque Sugerido
+            </span>
+            <h2 className="text-2xl font-bold mt-4 mb-2">Empuje</h2>
+            <p className="text-gray-400 mb-6 text-sm">
+              Pecho, Hombro y Tríceps. Enfocado en progresión de cargas en Press Banca.
+            </p>
+            <button 
+                onClick={() => router.push('/tracker')}
+                className="w-full bg-emerald-500 text-gray-900 font-bold py-4 rounded-xl active:scale-95 transition-transform text-lg shadow-lg shadow-emerald-500/30 mt-6"
+            >
+                INICIAR SESIÓN ▶
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------- PESTAÑA: PROGRESO ---------------- */}
+      {pestañaActiva === "progreso" && (
+        <div className="p-6 space-y-6 animate-fade-in">
+          <h2 className="text-2xl font-bold text-white mb-4">Tus Marcas</h2>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-gray-800 p-4 rounded-2xl border border-gray-700">
+              <p className="text-sm text-gray-400 mb-1">Press Banca</p>
+              <p className="text-2xl font-bold text-emerald-400">80 kg</p>
+              <p className="text-xs text-emerald-500 mt-2">↑ +2.5kg este mes</p>
+            </div>
+            <div className="bg-gray-800 p-4 rounded-2xl border border-gray-700">
+              <p className="text-sm text-gray-400 mb-1">Sentadilla</p>
+              <p className="text-2xl font-bold text-emerald-400">100 kg</p>
+              <p className="text-xs text-gray-500 mt-2">Manteniendo</p>
+            </div>
+          </div>
+
+          {/* Simulación visual de recomposición */}
+          <div className="bg-gray-800 p-5 rounded-2xl border border-gray-700 mt-6">
+            <h3 className="font-semibold mb-4">Evolución Corporal</h3>
+            <div className="space-y-3">
+              <div>
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="text-emerald-400">Masa Muscular</span>
+                  <span>↗</span>
+                </div>
+                <div className="w-full bg-gray-700 rounded-full h-2">
+                  <div className="bg-emerald-500 h-2 rounded-full w-2/3"></div>
+                </div>
+              </div>
+              <div>
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="text-blue-400">Grasa Corporal</span>
+                  <span>↘</span>
+                </div>
+                <div className="w-full bg-gray-700 rounded-full h-2">
+                  <div className="bg-blue-400 h-2 rounded-full w-1/3"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------- PESTAÑA: PERFIL ---------------- */}
+      {pestañaActiva === "perfil" && (
+        <div className="p-6 space-y-6 animate-fade-in">
+          <h2 className="text-2xl font-bold text-white mb-4">Mi Perfil</h2>
+          
+          <div className="bg-gray-800 p-5 rounded-2xl border border-gray-700">
+            <h3 className="text-sm uppercase text-gray-400 font-bold mb-4 tracking-wider">Métricas Actuales</h3>
+            <div className="space-y-4">
+              <div className="flex justify-between items-center border-b border-gray-700 pb-3">
+                <span className="text-gray-300">Estatura</span>
+                <span className="font-bold text-white">176 cm</span>
+              </div>
+              <div className="flex justify-between items-center border-b border-gray-700 pb-3">
+                <span className="text-gray-300">Peso Base</span>
+                <span className="font-bold text-white">96 kg</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-300">Objetivo Principal</span>
+                <span className="font-bold text-emerald-400">Recomposición</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gray-800 p-5 rounded-2xl border border-gray-700">
+            <h3 className="text-sm uppercase text-gray-400 font-bold mb-4 tracking-wider">Ajustes & Equipo</h3>
+            <div className="space-y-4">
+               <div className="flex justify-between items-center">
+                <span className="text-gray-300">Cafetera (Pre-entreno)</span>
+                <span className="text-sm text-gray-400">AeroPress Go</span>
+              </div>
+            </div>
+          </div>
+          
+          <button className="w-full text-red-400 font-bold py-3 mt-4 hover:bg-red-400/10 rounded-xl transition-colors">
+            Cerrar Sesión
+          </button>
+        </div>
+      )}
+
+      {/* ---------------- NAVEGACIÓN INFERIOR (BOTTOM BAR) ---------------- */}
+      <nav className="fixed bottom-0 w-full bg-gray-900 border-t border-gray-800 flex justify-around p-3 pb-6">
+        <button 
+          onClick={() => setPestañaActiva("hoy")}
+          className={`flex flex-col items-center gap-1 p-2 w-20 transition-colors ${pestañaActiva === "hoy" ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"}`}
+        >
+          <span className="text-2xl">🔥</span>
+          <span className="text-[10px] font-bold uppercase tracking-wider">Hoy</span>
+        </button>
+        
+        <button 
+          onClick={() => setPestañaActiva("progreso")}
+          className={`flex flex-col items-center gap-1 p-2 w-20 transition-colors ${pestañaActiva === "progreso" ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"}`}
+        >
+          <span className="text-2xl">📈</span>
+          <span className="text-[10px] font-bold uppercase tracking-wider">Progreso</span>
+        </button>
+
+        <button 
+          onClick={() => setPestañaActiva("perfil")}
+          className={`flex flex-col items-center gap-1 p-2 w-20 transition-colors ${pestañaActiva === "perfil" ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"}`}
+        >
+          <span className="text-2xl">⚙️</span>
+          <span className="text-[10px] font-bold uppercase tracking-wider">Perfil</span>
+        </button>
+      </nav>
+
+    </main>
+  );
+}
