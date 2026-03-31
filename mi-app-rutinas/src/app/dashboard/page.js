@@ -10,14 +10,17 @@ export default function Dashboard() {
   const [historial, setHistorial] = useState([]);
   const [cargandoDatos, setCargandoDatos] = useState(true);
 
-  // Estados del Perfil
   const [perfil, setPerfil] = useState({ estatura: "176", peso: "96", objetivo: "Recomposición" });
   const [editandoPerfil, setEditandoPerfil] = useState(false);
-  const [guardandoPerfil, setGuardandoPerfil] = useState(false);
-
-  // NUEVO: Estado para el creador de ejercicios
+  
   const [nuevoEjercicio, setNuevoEjercicio] = useState("");
-  const [guardandoEjercicio, setGuardandoEjercicio] = useState(false);
+  const [ejerciciosBD, setEjerciciosBD] = useState([]);
+
+  // ESTADOS DEL MANTENEDOR DE RUTINAS
+  const [rutinasBD, setRutinasBD] = useState([]);
+  const [nuevaRutinaNombre, setNuevaRutinaNombre] = useState("");
+  const [ejerciciosParaNuevaRutina, setEjerciciosParaNuevaRutina] = useState([]);
+  const [ejercicioSeleccionado, setEjercicioSeleccionado] = useState("");
 
   useEffect(() => {
     const obtenerDatos = async () => {
@@ -25,65 +28,74 @@ export default function Dashboard() {
       if (!usuario) return setCargandoDatos(false);
 
       try {
+        // Cargar Historial
         if (pestañaActiva === "progreso") {
-          const q = query(collection(db, "Usuarios", usuario.uid, "Sesiones"), orderBy("fecha", "desc"), limit(5));
-          const resultados = await getDocs(q);
-          setHistorial(resultados.docs.map(d => ({ id: d.id, ...d.data() })));
+          const q = query(collection(db, "Usuarios", usuario.uid, "Sesiones"), orderBy("fecha", "desc"), limit(10));
+          const snap = await getDocs(q);
+          setHistorial(snap.docs.map(d => ({ id: d.id, ...d.data() })));
         }
-
+        
+        // Cargar Perfil
         if (pestañaActiva === "perfil") {
           const docSnap = await getDoc(doc(db, "Usuarios", usuario.uid));
           if (docSnap.exists() && docSnap.data().perfil) setPerfil(docSnap.data().perfil);
         }
-      } catch (error) {
-        console.error("Error obteniendo datos:", error);
-      } finally {
-        setCargandoDatos(false);
-      }
+
+        // Cargar Ejercicios y Rutinas (Necesarios para Hoy y Perfil)
+        const snapEjercicios = await getDocs(collection(db, "Usuarios", usuario.uid, "Ejercicios"));
+        const listaEjercicios = snapEjercicios.docs.map(d => d.data().nombre);
+        setEjerciciosBD(listaEjercicios);
+        if (listaEjercicios.length > 0) setEjercicioSeleccionado(listaEjercicios[0]);
+
+        const snapRutinas = await getDocs(collection(db, "Usuarios", usuario.uid, "Rutinas"));
+        setRutinasBD(snapRutinas.docs.map(d => ({ id: d.id, ...d.data() })));
+
+      } catch (error) { console.error("Error obteniendo datos:", error); } 
+      finally { setCargandoDatos(false); }
     };
     obtenerDatos();
   }, [pestañaActiva]);
 
-  // FUNCIÓN 1: Guardar Perfil
+  // FUNCIONES DE PERFIL Y EJERCICIOS
   const guardarPerfil = async () => {
-    setGuardandoPerfil(true);
-    try {
-      await setDoc(doc(db, "Usuarios", auth.currentUser.uid), { perfil }, { merge: true });
-      setEditandoPerfil(false);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setGuardandoPerfil(false);
-    }
+    await setDoc(doc(db, "Usuarios", auth.currentUser.uid), { perfil }, { merge: true });
+    setEditandoPerfil(false);
   };
 
-  // FUNCIÓN 2 (NUEVA): Eliminar Entrenamiento del Historial
-  const eliminarSesion = async (idSesion) => {
-    if (!window.confirm("¿Estás seguro de que quieres borrar este entrenamiento?")) return;
-    try {
-      await deleteDoc(doc(db, "Usuarios", auth.currentUser.uid, "Sesiones", idSesion));
-      setHistorial(historial.filter(sesion => sesion.id !== idSesion)); // Lo quitamos de la pantalla
-    } catch (error) {
-      console.error("Error al eliminar:", error);
-      alert("Hubo un problema al borrar.");
-    }
+  const eliminarSesion = async (id) => {
+    if (!window.confirm("¿Borrar entrenamiento?")) return;
+    await deleteDoc(doc(db, "Usuarios", auth.currentUser.uid, "Sesiones", id));
+    setHistorial(historial.filter(s => s.id !== id));
   };
 
-  // FUNCIÓN 3 (NUEVA): Agregar un Ejercicio a tu lista personal
-  const agregarEjercicio = async () => {
+  const agregarEjercicioDB = async () => {
     if (!nuevoEjercicio.trim()) return;
-    setGuardandoEjercicio(true);
-    try {
-      await addDoc(collection(db, "Usuarios", auth.currentUser.uid, "Ejercicios"), {
-        nombre: nuevoEjercicio
-      });
-      setNuevoEjercicio(""); // Limpiamos el campo
-      alert("¡Ejercicio agregado a tu lista! 🏋️‍♂️");
-    } catch (error) {
-      console.error("Error agregando ejercicio:", error);
-    } finally {
-      setGuardandoEjercicio(false);
+    await addDoc(collection(db, "Usuarios", auth.currentUser.uid, "Ejercicios"), { nombre: nuevoEjercicio });
+    setEjerciciosBD([...ejerciciosBD, nuevoEjercicio]);
+    setNuevoEjercicio("");
+  };
+
+  // FUNCIONES DEL MANTENEDOR DE RUTINAS
+  const agregarEjercicioAPlantilla = () => {
+    if (ejercicioSeleccionado) {
+      setEjerciciosParaNuevaRutina([...ejerciciosParaNuevaRutina, ejercicioSeleccionado]);
     }
+  };
+
+  const guardarRutina = async () => {
+    if (!nuevaRutinaNombre.trim() || ejerciciosParaNuevaRutina.length === 0) return alert("Falta nombre o ejercicios.");
+    const nuevaData = { nombre: nuevaRutinaNombre, ejercicios: ejerciciosParaNuevaRutina };
+    const docRef = await addDoc(collection(db, "Usuarios", auth.currentUser.uid, "Rutinas"), nuevaData);
+    setRutinasBD([...rutinasBD, { id: docRef.id, ...nuevaData }]);
+    setNuevaRutinaNombre("");
+    setEjerciciosParaNuevaRutina([]);
+    alert("¡Rutina guardada!");
+  };
+
+  const eliminarRutina = async (id) => {
+    if (!window.confirm("¿Borrar esta rutina?")) return;
+    await deleteDoc(doc(db, "Usuarios", auth.currentUser.uid, "Rutinas", id));
+    setRutinasBD(rutinasBD.filter(r => r.id !== id));
   };
 
   const cerrarSesion = async () => {
@@ -99,156 +111,131 @@ export default function Dashboard() {
         <div className="p-6 space-y-6 animate-fade-in">
           <header>
             <h1 className="text-3xl font-bold text-emerald-400">¡A darle duro!</h1>
-            <p className="text-gray-400">Selecciona tu bloque de hoy.</p>
+            <p className="text-gray-400">Selecciona tu rutina de hoy.</p>
           </header>
 
           <div className="grid grid-cols-1 gap-4 mt-6">
-            {/* Plantilla 1: Piernas */}
-            <button 
-              onClick={() => router.push('/tracker?plan=piernas')}
-              className="bg-gradient-to-r from-gray-800 to-gray-900 p-5 rounded-3xl border border-gray-700 shadow-lg text-left hover:border-emerald-500 transition-colors"
-            >
-              <h3 className="text-xl font-bold text-emerald-400">Día 1: Piernas</h3>
-              <p className="text-sm text-gray-400 mt-1">Enfoque Unilateral (Sentadilla Búlgara, PMR...)</p>
-            </button>
+            {rutinasBD.map((rutina) => (
+              <button 
+                key={rutina.id}
+                onClick={() => router.push(`/tracker?plan=${rutina.id}`)}
+                className="bg-gradient-to-r from-gray-800 to-gray-900 p-5 rounded-3xl border border-gray-700 shadow-lg text-left hover:border-emerald-500 transition-colors"
+              >
+                <h3 className="text-xl font-bold text-emerald-400">{rutina.nombre}</h3>
+                <p className="text-sm text-gray-400 mt-1 line-clamp-1">{rutina.ejercicios.join(", ")}</p>
+              </button>
+            ))}
 
-            {/* Plantilla 2: Torso A */}
-            <button 
-              onClick={() => router.push('/tracker?plan=torsoa')}
-              className="bg-gradient-to-r from-gray-800 to-gray-900 p-5 rounded-3xl border border-gray-700 shadow-lg text-left hover:border-emerald-500 transition-colors"
-            >
-              <h3 className="text-xl font-bold text-emerald-400">Día 2: Torso A</h3>
-              <p className="text-sm text-gray-400 mt-1">Tracción / Empuje (Remo con Barra, Curl 45°...)</p>
-            </button>
+            {rutinasBD.length === 0 && !cargandoDatos && (
+              <div className="text-center p-6 bg-gray-800 rounded-3xl border border-dashed border-gray-600">
+                <p className="text-gray-400 text-sm">No tienes rutinas creadas.</p>
+                <p className="text-gray-500 text-xs mt-1">Ve a tu Perfil para armar tus bloques.</p>
+              </div>
+            )}
 
-            {/* Plantilla 3: Torso B */}
-            <button 
-              onClick={() => router.push('/tracker?plan=torsob')}
-              className="bg-gradient-to-r from-gray-800 to-gray-900 p-5 rounded-3xl border border-gray-700 shadow-lg text-left hover:border-emerald-500 transition-colors"
-            >
-              <h3 className="text-xl font-bold text-emerald-400">Día 3: Torso B</h3>
-              <p className="text-sm text-gray-400 mt-1">Empuje / Tracción (Press Banca, Curl Martillo...)</p>
-            </button>
-
-            {/* Entrenamiento Libre */}
-            <button 
-              onClick={() => router.push('/tracker')}
-              className="mt-4 w-full py-4 border-2 border-dashed border-gray-700 text-gray-400 font-bold rounded-2xl hover:border-gray-500 transition-colors"
-            >
+            <button onClick={() => router.push('/tracker')} className="mt-4 w-full py-4 border-2 border-dashed border-gray-700 text-gray-400 font-bold rounded-2xl hover:border-gray-500 transition-colors">
               + Entrenamiento Libre
             </button>
           </div>
         </div>
       )}
 
-      {/* ---------------- PESTAÑA: PROGRESO ---------------- */}
+      {/* ---------------- PESTAÑA: PROGRESO (Sin gráficos, lista limpia) ---------------- */}
       {pestañaActiva === "progreso" && (
         <div className="p-6 space-y-6 animate-fade-in">
           <h2 className="text-2xl font-bold text-white mb-4">Últimos Entrenamientos</h2>
-          {cargandoDatos ? <p className="text-gray-400 text-center py-10">Cargando...</p> : historial.length === 0 ? <p className="text-gray-400 text-center py-10">Aún no hay sesiones guardadas.</p> : (
-            <div className="space-y-4">
-              {historial.map((sesion) => (
-                <div key={sesion.id} className="bg-gray-800 p-5 rounded-2xl border border-gray-700 relative">
-                  
-                  {/* BOTÓN DE BORRAR SESIÓN */}
-                  <button 
-                    onClick={() => eliminarSesion(sesion.id)}
-                    className="absolute top-4 right-4 text-gray-500 hover:text-red-500 transition-colors p-1"
-                    title="Borrar entrenamiento"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                  </button>
-
-                  <div className="flex justify-between items-center mb-4 border-b border-gray-700 pb-3 pr-8">
-                    <h3 className="font-bold text-lg text-emerald-400">{sesion.rutina}</h3>
-                    <span className="text-xs font-bold text-gray-400 bg-gray-900 px-3 py-1 rounded-lg border border-gray-700">
-                      {sesion.fecha ? new Date(sesion.fecha.toDate()).toLocaleDateString() : 'Hoy'}
-                    </span>
-                  </div>
-                  
-                  {sesion.ejercicios_realizados ? (
-                    <div className="space-y-5">
-                      {sesion.ejercicios_realizados.map((bloque, idx) => (
-                        <div key={idx}>
-                          <p className="text-sm font-bold text-gray-200 mb-2 flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>{bloque.ejercicio}
-                          </p>
-                          <div className="space-y-1 pl-4 border-l-2 border-gray-700 ml-1">
-                            {bloque.series.map((s, i) => (
-                              <div key={i} className="flex justify-between text-xs text-gray-400"><span>Serie {i + 1}</span><span className="font-semibold text-white">{s.kg} kg × {s.reps} reps</span></div>
-                            ))}
-                          </div>
-                        </div>
+          <div className="space-y-4">
+            {historial.map((s) => (
+              <div key={s.id} className="bg-gray-800 p-5 rounded-2xl border border-gray-700 relative">
+                <button onClick={() => eliminarSesion(s.id)} className="absolute top-4 right-4 text-gray-500 hover:text-red-500">✕</button>
+                <div className="flex justify-between items-center mb-4 border-b border-gray-700 pb-3 pr-8">
+                  <h3 className="font-bold text-lg text-emerald-400">{s.rutina}</h3>
+                  <span className="text-xs font-bold text-gray-400 bg-gray-900 px-3 py-1 rounded-lg border border-gray-700">
+                    {s.fecha ? new Date(s.fecha.toDate()).toLocaleDateString() : 'Hoy'}
+                  </span>
+                </div>
+                {s.ejercicios_realizados?.map((ej, idx) => (
+                  <div key={idx} className="mb-3">
+                    <p className="text-sm font-bold text-gray-200 mb-1 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500"></span>{ej.ejercicio}
+                    </p>
+                    {ej.notas && <p className="text-[10px] text-gray-500 italic ml-4 mb-1">"{ej.notas}"</p>}
+                    <div className="space-y-1 pl-4 border-l-2 border-gray-700 ml-1">
+                      {ej.series.map((ser, i) => (
+                        <div key={i} className="flex justify-between text-xs text-gray-400"><span>Serie {i + 1}</span><span className="font-semibold text-white">{ser.kg} kg × {ser.reps} reps</span></div>
                       ))}
                     </div>
-                  ) : (
-                    <p className="text-xs text-gray-500 italic">Formato de rutina antiguo.</p>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
-      {/* ---------------- PESTAÑA: PERFIL ---------------- */}
+      {/* ---------------- PESTAÑA: PERFIL (Con Mantenedor) ---------------- */}
       {pestañaActiva === "perfil" && (
         <div className="p-6 space-y-6 animate-fade-in">
-          <div className="flex justify-between items-center mb-2">
-            <h2 className="text-2xl font-bold text-white">Mi Perfil</h2>
-            {!editandoPerfil ? (
-              <button onClick={() => setEditandoPerfil(true)} className="text-emerald-400 text-sm font-bold px-3 py-1 bg-emerald-400/10 rounded-lg">Editar</button>
-            ) : (
-              <div className="flex gap-2">
-                <button onClick={() => setEditandoPerfil(false)} className="text-gray-400 text-sm font-bold px-3 py-1 bg-gray-800 rounded-lg">Cancelar</button>
-                <button onClick={guardarPerfil} disabled={guardandoPerfil} className="text-gray-900 text-sm font-bold px-3 py-1 bg-emerald-500 rounded-lg">Guardar</button>
+          <h2 className="text-2xl font-bold text-white">Mi Perfil</h2>
+          
+          <div className="bg-gray-800 p-5 rounded-2xl border border-gray-700">
+            <h3 className="text-sm uppercase text-gray-400 font-bold mb-4">Tus Datos</h3>
+            <div className="space-y-4">
+              <div className="flex justify-between items-center border-b border-gray-700 pb-3">
+                <span className="text-gray-300">Peso Base</span>
+                <span className="font-bold">{perfil.peso} kg</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gray-800 p-5 rounded-2xl border border-gray-700">
+            <h3 className="text-sm uppercase text-emerald-400 font-bold mb-2">1. Base de Ejercicios</h3>
+            <div className="flex gap-2">
+              <input type="text" placeholder="Ej. Elevaciones Laterales" value={nuevoEjercicio} onChange={(e) => setNuevoEjercicio(e.target.value)} className="flex-1 bg-gray-900 text-white rounded-xl py-2 px-3 outline-none text-sm"/>
+              <button onClick={agregarEjercicioDB} disabled={!nuevoEjercicio.trim()} className="bg-emerald-500 text-gray-900 font-bold px-4 py-2 rounded-xl">+</button>
+            </div>
+          </div>
+
+          {/* MANTENEDOR DE RUTINAS */}
+          <div className="bg-gray-800 p-5 rounded-2xl border border-emerald-500/30">
+            <h3 className="text-sm uppercase text-emerald-400 font-bold mb-2">2. Armar Rutina</h3>
+            
+            <input type="text" placeholder="Nombre (Ej. Día 1: Piernas)" value={nuevaRutinaNombre} onChange={(e) => setNuevaRutinaNombre(e.target.value)} className="w-full bg-gray-900 text-white rounded-xl py-2 px-3 outline-none text-sm mb-3 border border-gray-700"/>
+            
+            <div className="flex gap-2 mb-3">
+              <select value={ejercicioSeleccionado} onChange={(e) => setEjercicioSeleccionado(e.target.value)} className="flex-1 bg-gray-900 text-white rounded-xl py-2 px-3 outline-none text-sm border border-gray-700">
+                {ejerciciosBD.map((ej, i) => <option key={i} value={ej}>{ej}</option>)}
+              </select>
+              <button onClick={agregarEjercicioAPlantilla} className="bg-gray-700 text-white font-bold px-4 py-2 rounded-xl text-sm">Añadir</button>
+            </div>
+
+            {ejerciciosParaNuevaRutina.length > 0 && (
+              <ul className="mb-4 space-y-1">
+                {ejerciciosParaNuevaRutina.map((ej, idx) => (
+                  <li key={idx} className="text-xs text-gray-400 flex items-center gap-2">
+                    <span className="text-emerald-500">{idx + 1}.</span> {ej}
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <button onClick={guardarRutina} className="w-full bg-emerald-500 text-gray-900 font-bold py-2 rounded-xl text-sm mt-2">Guardar Rutina</button>
+
+            {/* Lista de rutinas armadas */}
+            {rutinasBD.length > 0 && (
+              <div className="mt-6 border-t border-gray-700 pt-4 space-y-2">
+                <p className="text-xs text-gray-500 font-bold mb-2 uppercase">Rutinas Guardadas:</p>
+                {rutinasBD.map(r => (
+                  <div key={r.id} className="flex justify-between items-center bg-gray-900 p-2 rounded-lg">
+                    <span className="text-sm font-semibold">{r.nombre}</span>
+                    <button onClick={() => eliminarRutina(r.id)} className="text-red-500 text-xs px-2 py-1 bg-red-500/10 rounded">Borrar</button>
+                  </div>
+                ))}
               </div>
             )}
           </div>
           
-          <div className="bg-gray-800 p-5 rounded-2xl border border-gray-700">
-            <h3 className="text-sm uppercase text-gray-400 font-bold mb-4">Métricas Actuales</h3>
-            <div className="space-y-4">
-              <div className="flex justify-between items-center border-b border-gray-700 pb-3">
-                <span className="text-gray-300">Estatura</span>
-                {editandoPerfil ? <input type="number" value={perfil.estatura} onChange={(e) => setPerfil({...perfil, estatura: e.target.value})} className="w-20 bg-gray-900 text-white text-right rounded-lg py-1 px-2" /> : <span className="font-bold">{perfil.estatura} cm</span>}
-              </div>
-              <div className="flex justify-between items-center border-b border-gray-700 pb-3">
-                <span className="text-gray-300">Peso Base</span>
-                {editandoPerfil ? <input type="number" value={perfil.peso} onChange={(e) => setPerfil({...perfil, peso: e.target.value})} className="w-20 bg-gray-900 text-white text-right rounded-lg py-1 px-2" /> : <span className="font-bold">{perfil.peso} kg</span>}
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-300">Objetivo</span>
-                {editandoPerfil ? <input type="text" value={perfil.objetivo} onChange={(e) => setPerfil({...perfil, objetivo: e.target.value})} className="w-40 bg-gray-900 text-emerald-400 text-right rounded-lg py-1 px-2" /> : <span className="font-bold text-emerald-400">{perfil.objetivo}</span>}
-              </div>
-            </div>
-          </div>
-
-          {/* NUEVA SECCIÓN: CREADOR DE EJERCICIOS */}
-          <div className="bg-gray-800 p-5 rounded-2xl border border-gray-700">
-            <h3 className="text-sm uppercase text-gray-400 font-bold mb-2">Añadir Ejercicio</h3>
-            <p className="text-xs text-gray-500 mb-4">Agrega ejercicios personalizados a tu base de datos para usarlos en el Tracker.</p>
-            <div className="flex gap-2">
-              <input 
-                type="text" 
-                placeholder="Ej. Elevaciones Laterales" 
-                value={nuevoEjercicio}
-                onChange={(e) => setNuevoEjercicio(e.target.value)}
-                className="flex-1 bg-gray-900 text-white rounded-xl py-2 px-3 outline-none focus:ring-1 focus:ring-emerald-500 text-sm"
-              />
-              <button 
-                onClick={agregarEjercicio}
-                disabled={guardandoEjercicio || !nuevoEjercicio.trim()}
-                className="bg-emerald-500 text-gray-900 font-bold px-4 py-2 rounded-xl disabled:opacity-50"
-              >
-                +
-              </button>
-            </div>
-          </div>
-          
-          <button onClick={cerrarSesion} className="w-full text-red-400 font-bold py-3 hover:bg-red-400/10 rounded-xl transition-colors">
-            Cerrar Sesión
-          </button>
+          <button onClick={cerrarSesion} className="w-full text-red-400 font-bold py-3 hover:bg-red-400/10 rounded-xl">Cerrar Sesión</button>
         </div>
       )}
 
