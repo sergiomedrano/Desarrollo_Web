@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { auth, db } from "../../firebase"; 
-import { collection, query, orderBy, getDocs, limit, doc, getDoc, setDoc, deleteDoc, addDoc } from "firebase/firestore";
+import { collection, query, orderBy, getDocs, limit, doc, getDoc, setDoc, deleteDoc, addDoc, updateDoc } from "firebase/firestore";
 
 export default function Dashboard() {
   const router = useRouter();
@@ -21,6 +21,9 @@ export default function Dashboard() {
   const [nuevaRutinaNombre, setNuevaRutinaNombre] = useState("");
   const [ejerciciosParaNuevaRutina, setEjerciciosParaNuevaRutina] = useState([]);
   const [ejercicioSeleccionado, setEjercicioSeleccionado] = useState("");
+  
+  // NUEVO: Estado para saber si estamos editando una rutina existente
+  const [rutinaEnEdicionId, setRutinaEnEdicionId] = useState(null);
 
   useEffect(() => {
     const obtenerDatos = async () => {
@@ -28,28 +31,26 @@ export default function Dashboard() {
       if (!usuario) return setCargandoDatos(false);
 
       try {
-        // Cargar Historial
         if (pestañaActiva === "progreso") {
           const q = query(collection(db, "Usuarios", usuario.uid, "Sesiones"), orderBy("fecha", "desc"), limit(10));
           const snap = await getDocs(q);
           setHistorial(snap.docs.map(d => ({ id: d.id, ...d.data() })));
         }
         
-        // Cargar Perfil
         if (pestañaActiva === "perfil") {
           const docSnap = await getDoc(doc(db, "Usuarios", usuario.uid));
           if (docSnap.exists() && docSnap.data().perfil) setPerfil(docSnap.data().perfil);
         }
 
-        // Cargar Ejercicios y Rutinas (Necesarios para Hoy y Perfil)
+        // Cargar Ejercicios (ALFABÉTICAMENTE)
         const qEjercicios = query(collection(db, "Usuarios", usuario.uid, "Ejercicios"), orderBy("nombre", "asc"));
         const snapEjercicios = await getDocs(qEjercicios);
         const listaEjercicios = snapEjercicios.docs.map(d => d.data().nombre);
         setEjerciciosBD(listaEjercicios);
         if (listaEjercicios.length > 0) setEjercicioSeleccionado(listaEjercicios[0]);
 
-        const qRutinas = query(collection(db, "Usuarios", usuario.uid, "Rutinas"), orderBy("nombre", "asc"));
-        const snapRutinas = await getDocs(qRutinas);
+        // Cargar Rutinas
+        const snapRutinas = await getDocs(collection(db, "Usuarios", usuario.uid, "Rutinas"));
         setRutinasBD(snapRutinas.docs.map(d => ({ id: d.id, ...d.data() })));
 
       } catch (error) { console.error("Error obteniendo datos:", error); } 
@@ -58,7 +59,6 @@ export default function Dashboard() {
     obtenerDatos();
   }, [pestañaActiva]);
 
-  // FUNCIONES DE PERFIL Y EJERCICIOS
   const guardarPerfil = async () => {
     await setDoc(doc(db, "Usuarios", auth.currentUser.uid), { perfil }, { merge: true });
     setEditandoPerfil(false);
@@ -73,31 +73,65 @@ export default function Dashboard() {
   const agregarEjercicioDB = async () => {
     if (!nuevoEjercicio.trim()) return;
     await addDoc(collection(db, "Usuarios", auth.currentUser.uid, "Ejercicios"), { nombre: nuevoEjercicio });
-    setEjerciciosBD([...ejerciciosBD, nuevoEjercicio]);
+    // Recargar para mantener el orden alfabético
+    const qEjercicios = query(collection(db, "Usuarios", auth.currentUser.uid, "Ejercicios"), orderBy("nombre", "asc"));
+    const snapEjercicios = await getDocs(qEjercicios);
+    setEjerciciosBD(snapEjercicios.docs.map(d => d.data().nombre));
     setNuevoEjercicio("");
   };
 
-  // FUNCIONES DEL MANTENEDOR DE RUTINAS
+  // --- NUEVAS FUNCIONES DEL MANTENEDOR DE RUTINAS ---
   const agregarEjercicioAPlantilla = () => {
-    if (ejercicioSeleccionado) {
-      setEjerciciosParaNuevaRutina([...ejerciciosParaNuevaRutina, ejercicioSeleccionado]);
-    }
+    if (ejercicioSeleccionado) setEjerciciosParaNuevaRutina([...ejerciciosParaNuevaRutina, ejercicioSeleccionado]);
+  };
+
+  const removerEjercicioDePlantilla = (indexToRemove) => {
+    setEjerciciosParaNuevaRutina(ejerciciosParaNuevaRutina.filter((_, idx) => idx !== indexToRemove));
+  };
+
+  const editarRutina = (rutina) => {
+    setRutinaEnEdicionId(rutina.id);
+    setNuevaRutinaNombre(rutina.nombre);
+    setEjerciciosParaNuevaRutina([...rutina.ejercicios]);
+    // Hacemos scroll suave hacia arriba para ver el formulario
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const cancelarEdicion = () => {
+    setRutinaEnEdicionId(null);
+    setNuevaRutinaNombre("");
+    setEjerciciosParaNuevaRutina([]);
   };
 
   const guardarRutina = async () => {
     if (!nuevaRutinaNombre.trim() || ejerciciosParaNuevaRutina.length === 0) return alert("Falta nombre o ejercicios.");
     const nuevaData = { nombre: nuevaRutinaNombre, ejercicios: ejerciciosParaNuevaRutina };
-    const docRef = await addDoc(collection(db, "Usuarios", auth.currentUser.uid, "Rutinas"), nuevaData);
-    setRutinasBD([...rutinasBD, { id: docRef.id, ...nuevaData }]);
-    setNuevaRutinaNombre("");
-    setEjerciciosParaNuevaRutina([]);
-    alert("¡Rutina guardada!");
+
+    try {
+      if (rutinaEnEdicionId) {
+        // Actualizar rutina existente
+        await updateDoc(doc(db, "Usuarios", auth.currentUser.uid, "Rutinas", rutinaEnEdicionId), nuevaData);
+        setRutinasBD(rutinasBD.map(r => r.id === rutinaEnEdicionId ? { id: rutinaEnEdicionId, ...nuevaData } : r));
+        alert("¡Rutina actualizada con éxito!");
+      } else {
+        // Crear rutina nueva
+        const docRef = await addDoc(collection(db, "Usuarios", auth.currentUser.uid, "Rutinas"), nuevaData);
+        setRutinasBD([...rutinasBD, { id: docRef.id, ...nuevaData }]);
+        alert("¡Rutina creada con éxito!");
+      }
+      cancelarEdicion(); // Limpia el formulario
+    } catch (error) {
+      console.error("Error guardando rutina:", error);
+      alert("Hubo un error al guardar.");
+    }
   };
 
   const eliminarRutina = async (id) => {
-    if (!window.confirm("¿Borrar esta rutina?")) return;
+    if (!window.confirm("¿Borrar esta rutina? Esto no borrará tu historial de entrenamientos pasados.")) return;
     await deleteDoc(doc(db, "Usuarios", auth.currentUser.uid, "Rutinas", id));
     setRutinasBD(rutinasBD.filter(r => r.id !== id));
+    // Si la estábamos editando justo ahora, cancelamos la edición
+    if (rutinaEnEdicionId === id) cancelarEdicion();
   };
 
   const cerrarSesion = async () => {
@@ -142,7 +176,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ---------------- PESTAÑA: PROGRESO (Sin gráficos, lista limpia) ---------------- */}
+      {/* ---------------- PESTAÑA: PROGRESO ---------------- */}
       {pestañaActiva === "progreso" && (
         <div className="p-6 space-y-6 animate-fade-in">
           <h2 className="text-2xl font-bold text-white mb-4">Últimos Entrenamientos</h2>
@@ -175,21 +209,11 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ---------------- PESTAÑA: PERFIL (Con Mantenedor) ---------------- */}
+      {/* ---------------- PESTAÑA: PERFIL ---------------- */}
       {pestañaActiva === "perfil" && (
         <div className="p-6 space-y-6 animate-fade-in">
           <h2 className="text-2xl font-bold text-white">Mi Perfil</h2>
           
-          <div className="bg-gray-800 p-5 rounded-2xl border border-gray-700">
-            <h3 className="text-sm uppercase text-gray-400 font-bold mb-4">Tus Datos</h3>
-            <div className="space-y-4">
-              <div className="flex justify-between items-center border-b border-gray-700 pb-3">
-                <span className="text-gray-300">Peso Base</span>
-                <span className="font-bold">{perfil.peso} kg</span>
-              </div>
-            </div>
-          </div>
-
           <div className="bg-gray-800 p-5 rounded-2xl border border-gray-700">
             <h3 className="text-sm uppercase text-emerald-400 font-bold mb-2">1. Base de Ejercicios</h3>
             <div className="flex gap-2">
@@ -199,8 +223,10 @@ export default function Dashboard() {
           </div>
 
           {/* MANTENEDOR DE RUTINAS */}
-          <div className="bg-gray-800 p-5 rounded-2xl border border-emerald-500/30">
-            <h3 className="text-sm uppercase text-emerald-400 font-bold mb-2">2. Armar Rutina</h3>
+          <div className={`bg-gray-800 p-5 rounded-2xl border ${rutinaEnEdicionId ? 'border-amber-500/50' : 'border-emerald-500/30'} transition-colors`}>
+            <h3 className={`text-sm uppercase font-bold mb-2 ${rutinaEnEdicionId ? 'text-amber-400' : 'text-emerald-400'}`}>
+              {rutinaEnEdicionId ? "Editando Rutina" : "2. Armar Rutina"}
+            </h3>
             
             <input type="text" placeholder="Nombre (Ej. Día 1: Piernas)" value={nuevaRutinaNombre} onChange={(e) => setNuevaRutinaNombre(e.target.value)} className="w-full bg-gray-900 text-white rounded-xl py-2 px-3 outline-none text-sm mb-3 border border-gray-700"/>
             
@@ -208,43 +234,56 @@ export default function Dashboard() {
               <select value={ejercicioSeleccionado} onChange={(e) => setEjercicioSeleccionado(e.target.value)} className="flex-1 bg-gray-900 text-white rounded-xl py-2 px-3 outline-none text-sm border border-gray-700">
                 {ejerciciosBD.map((ej, i) => <option key={i} value={ej}>{ej}</option>)}
               </select>
-              <button onClick={agregarEjercicioAPlantilla} className="bg-gray-700 text-white font-bold px-4 py-2 rounded-xl text-sm">Añadir</button>
+              <button onClick={agregarEjercicioAPlantilla} className="bg-gray-700 text-white font-bold px-4 py-2 rounded-xl text-sm hover:bg-gray-600 transition-colors">Añadir</button>
             </div>
 
             {ejerciciosParaNuevaRutina.length > 0 && (
-              <ul className="mb-4 space-y-1">
+              <ul className="mb-4 space-y-2">
                 {ejerciciosParaNuevaRutina.map((ej, idx) => (
-                  <li key={idx} className="text-xs text-gray-400 flex items-center gap-2">
-                    <span className="text-emerald-500">{idx + 1}.</span> {ej}
+                  <li key={idx} className="text-xs text-gray-300 flex justify-between items-center bg-gray-900 p-2 rounded-lg border border-gray-700">
+                    <span><span className="text-emerald-500 font-bold mr-2">{idx + 1}.</span> {ej}</span>
+                    <button onClick={() => removerEjercicioDePlantilla(idx)} className="text-red-500 hover:text-red-400 font-bold px-2 py-1">✕</button>
                   </li>
                 ))}
               </ul>
             )}
 
-            <button onClick={guardarRutina} className="w-full bg-emerald-500 text-gray-900 font-bold py-2 rounded-xl text-sm mt-2">Guardar Rutina</button>
+            <div className="flex gap-2 mt-2">
+              <button onClick={guardarRutina} className="flex-1 bg-emerald-500 text-gray-900 font-bold py-3 rounded-xl text-sm shadow-lg hover:bg-emerald-400 transition-colors">
+                {rutinaEnEdicionId ? "Actualizar Rutina" : "Guardar Rutina"}
+              </button>
+              {rutinaEnEdicionId && (
+                <button onClick={cancelarEdicion} className="bg-gray-700 text-white font-bold py-3 px-4 rounded-xl text-sm hover:bg-gray-600 transition-colors">
+                  Cancelar
+                </button>
+              )}
+            </div>
 
             {/* Lista de rutinas armadas */}
             {rutinasBD.length > 0 && (
               <div className="mt-6 border-t border-gray-700 pt-4 space-y-2">
-                <p className="text-xs text-gray-500 font-bold mb-2 uppercase">Rutinas Guardadas:</p>
+                <p className="text-xs text-gray-500 font-bold mb-3 uppercase tracking-wider">Tus Rutinas:</p>
                 {rutinasBD.map(r => (
-                  <div key={r.id} className="flex justify-between items-center bg-gray-900 p-2 rounded-lg">
-                    <span className="text-sm font-semibold">{r.nombre}</span>
-                    <button onClick={() => eliminarRutina(r.id)} className="text-red-500 text-xs px-2 py-1 bg-red-500/10 rounded">Borrar</button>
+                  <div key={r.id} className="flex flex-col sm:flex-row justify-between sm:items-center bg-gray-900 p-3 rounded-xl border border-gray-800 gap-2">
+                    <span className="text-sm font-semibold text-gray-200">{r.nombre}</span>
+                    <div className="flex gap-2">
+                      <button onClick={() => editarRutina(r)} className="text-emerald-400 font-bold text-xs px-3 py-2 bg-emerald-400/10 hover:bg-emerald-400/20 rounded-lg transition-colors">Editar</button>
+                      <button onClick={() => eliminarRutina(r.id)} className="text-red-400 font-bold text-xs px-3 py-2 bg-red-500/10 hover:bg-red-500/20 rounded-lg transition-colors">Borrar</button>
+                    </div>
                   </div>
                 ))}
               </div>
             )}
           </div>
           
-          <button onClick={cerrarSesion} className="w-full text-red-400 font-bold py-3 hover:bg-red-400/10 rounded-xl">Cerrar Sesión</button>
+          <button onClick={cerrarSesion} className="w-full text-red-400 font-bold py-3 mt-8 hover:bg-red-400/10 rounded-xl transition-colors">Cerrar Sesión</button>
         </div>
       )}
 
       <nav className="fixed bottom-0 w-full bg-gray-900 border-t border-gray-800 flex justify-around p-3 pb-6 z-50">
-        <button onClick={() => setPestañaActiva("hoy")} className={`flex flex-col items-center gap-1 p-2 w-20 ${pestañaActiva === "hoy" ? "text-emerald-400" : "text-gray-500"}`}><span className="text-2xl">🔥</span><span className="text-[10px] font-bold uppercase">Hoy</span></button>
-        <button onClick={() => setPestañaActiva("progreso")} className={`flex flex-col items-center gap-1 p-2 w-20 ${pestañaActiva === "progreso" ? "text-emerald-400" : "text-gray-500"}`}><span className="text-2xl">📈</span><span className="text-[10px] font-bold uppercase">Progreso</span></button>
-        <button onClick={() => setPestañaActiva("perfil")} className={`flex flex-col items-center gap-1 p-2 w-20 ${pestañaActiva === "perfil" ? "text-emerald-400" : "text-gray-500"}`}><span className="text-2xl">⚙️</span><span className="text-[10px] font-bold uppercase">Perfil</span></button>
+        <button onClick={() => setPestañaActiva("hoy")} className={`flex flex-col items-center gap-1 p-2 w-20 transition-colors ${pestañaActiva === "hoy" ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"}`}><span className="text-2xl">🔥</span><span className="text-[10px] font-bold uppercase">Hoy</span></button>
+        <button onClick={() => setPestañaActiva("progreso")} className={`flex flex-col items-center gap-1 p-2 w-20 transition-colors ${pestañaActiva === "progreso" ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"}`}><span className="text-2xl">📈</span><span className="text-[10px] font-bold uppercase">Progreso</span></button>
+        <button onClick={() => setPestañaActiva("perfil")} className={`flex flex-col items-center gap-1 p-2 w-20 transition-colors ${pestañaActiva === "perfil" ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"}`}><span className="text-2xl">⚙️</span><span className="text-[10px] font-bold uppercase">Perfil</span></button>
       </nav>
     </main>
   );
