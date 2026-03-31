@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { auth, db } from "../../firebase"; // Conexión a tu BD
+import { auth, db } from "../../firebase"; 
 import { collection, query, orderBy, getDocs, limit } from "firebase/firestore";
 
 export default function Dashboard() {
@@ -10,10 +10,8 @@ export default function Dashboard() {
   const [historial, setHistorial] = useState([]);
   const [cargandoDatos, setCargandoDatos] = useState(true);
 
-  // Esta función busca tus últimos 5 entrenamientos en la nube
   useEffect(() => {
     const obtenerHistorial = async () => {
-      // Nos aseguramos de que haya un usuario conectado
       const usuario = auth.currentUser;
       if (!usuario) {
         setCargandoDatos(false);
@@ -21,7 +19,6 @@ export default function Dashboard() {
       }
 
       try {
-        // Buscamos en la carpeta del usuario, ordenado por fecha más reciente
         const q = query(
           collection(db, "Usuarios", usuario.uid, "Sesiones"),
           orderBy("fecha", "desc"),
@@ -42,13 +39,11 @@ export default function Dashboard() {
       }
     };
 
-    // Solo buscamos los datos si entramos a la pestaña de progreso
     if (pestañaActiva === "progreso") {
       obtenerHistorial();
     }
   }, [pestañaActiva]);
 
-  // Función para cerrar sesión
   const cerrarSesion = async () => {
     await auth.signOut();
     router.push("/");
@@ -79,9 +74,9 @@ export default function Dashboard() {
             <span className="bg-emerald-500/20 text-emerald-400 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide">
               Bloque Sugerido
             </span>
-            <h2 className="text-2xl font-bold mt-4 mb-2">Empuje</h2>
+            <h2 className="text-2xl font-bold mt-4 mb-2">Entrenamiento Libre</h2>
             <p className="text-gray-400 mb-6 text-sm">
-              Pecho, Hombro y Tríceps. Enfocado en progresión de cargas en Press Banca.
+              Selecciona tus ejercicios y registra tus marcas del día.
             </p>
             <button 
               onClick={() => router.push('/tracker')}
@@ -93,7 +88,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ---------------- PESTAÑA: PROGRESO ---------------- */}
+      {/* ---------------- PESTAÑA: PROGRESO (ACTUALIZADA) ---------------- */}
       {pestañaActiva === "progreso" && (
         <div className="p-6 space-y-6 animate-fade-in">
           <h2 className="text-2xl font-bold text-white mb-4">Últimos Entrenamientos</h2>
@@ -106,26 +101,51 @@ export default function Dashboard() {
             <div className="space-y-4">
               {historial.map((sesion) => (
                 <div key={sesion.id} className="bg-gray-800 p-5 rounded-2xl border border-gray-700">
-                  <div className="flex justify-between items-start mb-3">
-                    <div>
-                      <h3 className="font-bold text-lg text-emerald-400">{sesion.rutina}</h3>
-                      <p className="text-sm text-gray-400">{sesion.ejercicio_principal}</p>
-                    </div>
-                    {/* Formateamos la fecha si existe */}
-                    <span className="text-xs text-gray-500 bg-gray-900 px-2 py-1 rounded-md">
+                  <div className="flex justify-between items-center mb-4 border-b border-gray-700 pb-3">
+                    <h3 className="font-bold text-lg text-emerald-400">{sesion.rutina}</h3>
+                    <span className="text-xs font-bold text-gray-400 bg-gray-900 px-3 py-1 rounded-lg border border-gray-700">
                       {sesion.fecha ? new Date(sesion.fecha.toDate()).toLocaleDateString() : 'Hoy'}
                     </span>
                   </div>
                   
-                  {/* Listamos las series que guardaste en esa sesión */}
-                  <div className="space-y-2 mt-4 pt-4 border-t border-gray-700/50">
-                    {sesion.historial_series && sesion.historial_series.map((serie, idx) => (
-                      <div key={idx} className="flex justify-between text-sm">
-                        <span className="text-gray-400">Serie {idx + 1}</span>
-                        <span className="font-bold">{serie.kg} kg × {serie.reps} reps</span>
+                  {/* Lógica para mostrar múltiples ejercicios de la NUEVA estructura */}
+                  {sesion.ejercicios_realizados ? (
+                    <div className="space-y-5">
+                      {sesion.ejercicios_realizados.map((bloque, idxBloque) => (
+                        <div key={idxBloque}>
+                          <p className="text-sm font-bold text-gray-200 mb-2 flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                            {bloque.ejercicio}
+                          </p>
+                          <div className="space-y-1 pl-4 border-l-2 border-gray-700 ml-1">
+                            {bloque.series.map((serie, idxSerie) => (
+                              <div key={idxSerie} className="flex justify-between text-xs text-gray-400">
+                                <span>Serie {idxSerie + 1}</span>
+                                <span className="font-semibold text-white">{serie.kg} kg × {serie.reps} reps</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    // Lógica de respaldo para mostrar la estructura VIEJA (1 solo ejercicio)
+                    <div className="space-y-2 mt-2">
+                      <p className="text-sm font-bold text-gray-200 mb-2 flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        {sesion.ejercicio_principal}
+                      </p>
+                      <div className="space-y-1 pl-4 border-l-2 border-gray-700 ml-1">
+                        {sesion.historial_series && sesion.historial_series.map((serie, idx) => (
+                          <div key={idx} className="flex justify-between text-xs text-gray-400">
+                            <span>Serie {idx + 1}</span>
+                            <span className="font-semibold text-white">{serie.kg} kg × {serie.reps} reps</span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  )}
+
                 </div>
               ))}
             </div>
