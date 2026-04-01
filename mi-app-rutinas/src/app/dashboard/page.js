@@ -25,6 +25,10 @@ export default function Dashboard() {
   const [tiempoDescansoManual, setTiempoDescansoManual] = useState(90);
   const [rutinaEnEdicionId, setRutinaEnEdicionId] = useState(null);
 
+  // NUEVO: Estados para el calentamiento específico
+  const [nuevoPasoMovilidad, setNuevoPasoMovilidad] = useState("");
+  const [pasosMovilidadRutina, setPasosMovilidadRutina] = useState([]);
+
   // ESTADO PARA LA GRÁFICA
   const [ejercicioGrafica, setEjercicioGrafica] = useState("");
 
@@ -70,7 +74,6 @@ export default function Dashboard() {
     obtenerDatos();
   }, [pestañaActiva, ejercicioGrafica]);
 
-  // PREPARACIÓN DE DATOS PARA GRÁFICA COMBINADA
   const datosGraficaDinamica = historial.slice().reverse().map(sesion => {
     if (!sesion.ejercicios_realizados) return null;
     const ejercicioEnSesion = sesion.ejercicios_realizados.find(e => e.ejercicio === ejercicioGrafica);
@@ -119,7 +122,18 @@ export default function Dashboard() {
     setNuevoEjercicio("");
   };
 
-  // FUNCIONES DEL MANTENEDOR DE RUTINAS
+  // FUNCIONES DE RUTINA Y MOVILIDAD
+  const agregarPasoMovilidad = () => {
+    if (nuevoPasoMovilidad.trim()) {
+      setPasosMovilidadRutina([...pasosMovilidadRutina, nuevoPasoMovilidad.trim()]);
+      setNuevoPasoMovilidad("");
+    }
+  };
+
+  const removerPasoMovilidad = (indexToRemove) => {
+    setPasosMovilidadRutina(pasosMovilidadRutina.filter((_, idx) => idx !== indexToRemove));
+  };
+
   const agregarEjercicioAPlantilla = () => {
     if (ejercicioSeleccionado) {
       setEjerciciosParaNuevaRutina([...ejerciciosParaNuevaRutina, { 
@@ -136,7 +150,10 @@ export default function Dashboard() {
   const editarRutina = (rutina) => {
     setRutinaEnEdicionId(rutina.id);
     setNuevaRutinaNombre(rutina.nombre);
-    // Normalizamos por si es una rutina antigua que solo tenía strings
+    
+    // Cargar movilidad si existe
+    setPasosMovilidadRutina(rutina.movilidad || []);
+
     const ejerciciosNormalizados = rutina.ejercicios.map(ej => 
       typeof ej === 'string' ? { nombre: ej, descanso: 90 } : ej
     );
@@ -148,12 +165,20 @@ export default function Dashboard() {
     setRutinaEnEdicionId(null);
     setNuevaRutinaNombre("");
     setEjerciciosParaNuevaRutina([]);
+    setPasosMovilidadRutina([]);
     setTiempoDescansoManual(90);
+    setNuevoPasoMovilidad("");
   };
 
   const guardarRutina = async () => {
     if (!nuevaRutinaNombre.trim() || ejerciciosParaNuevaRutina.length === 0) return alert("Falta nombre o ejercicios.");
-    const nuevaData = { nombre: nuevaRutinaNombre, ejercicios: ejerciciosParaNuevaRutina };
+    
+    // Agregamos la movilidad al objeto que se guarda en Firebase
+    const nuevaData = { 
+      nombre: nuevaRutinaNombre, 
+      ejercicios: ejerciciosParaNuevaRutina,
+      movilidad: pasosMovilidadRutina
+    };
 
     try {
       if (rutinaEnEdicionId) {
@@ -330,10 +355,35 @@ export default function Dashboard() {
               {rutinaEnEdicionId ? "Editando Rutina" : "2. Armar Bloque"}
             </h3>
             
-            <input type="text" placeholder="Nombre de la Rutina" value={nuevaRutinaNombre} onChange={(e) => setNuevaRutinaNombre(e.target.value)} className="w-full bg-gray-900 text-white rounded-xl py-3 px-4 outline-none text-sm mb-4 border border-gray-700 focus:ring-1 focus:ring-emerald-500"/>
+            <input type="text" placeholder="Nombre de la Rutina" value={nuevaRutinaNombre} onChange={(e) => setNuevaRutinaNombre(e.target.value)} className="w-full bg-gray-900 text-white rounded-xl py-3 px-4 outline-none text-sm mb-6 border border-gray-700 focus:ring-1 focus:ring-emerald-500"/>
             
+            {/* NUEVO: SECCIÓN DE MOVILIDAD */}
+            <div className="space-y-3 p-4 bg-gray-900/30 rounded-2xl border border-dashed border-gray-600 mb-6">
+              <label className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-2">
+                <span className="text-emerald-500 text-sm">🧘‍♂️</span> Añadir Paso de Movilidad (Opcional)
+              </label>
+              <div className="flex gap-2">
+                <input type="text" placeholder="Ej. Dislocaciones de hombro" value={nuevoPasoMovilidad} onChange={(e) => setNuevoPasoMovilidad(e.target.value)} className="flex-1 bg-gray-900 text-white rounded-xl py-2 px-3 outline-none text-sm border border-gray-700"/>
+                <button onClick={agregarPasoMovilidad} className="bg-gray-700 text-white font-bold px-4 py-2 rounded-xl text-sm hover:bg-gray-600 transition-colors">Añadir</button>
+              </div>
+              
+              {pasosMovilidadRutina.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {pasosMovilidadRutina.map((paso, idx) => (
+                    <div key={idx} className="flex justify-between items-center bg-gray-800 p-2 rounded-lg border border-gray-700 text-xs text-gray-300">
+                      <span><span className="text-emerald-500 font-bold mr-2">✓</span> {paso}</span>
+                      <button onClick={() => removerPasoMovilidad(idx)} className="text-red-500 hover:text-red-400 font-bold px-2 py-1">✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* SECCIÓN DE EJERCICIOS (PESAS) */}
             <div className="space-y-3 p-4 bg-gray-900/50 rounded-2xl border border-gray-700 mb-4">
-              <label className="text-[10px] font-bold text-gray-500 uppercase">Añadir Ejercicio y Descanso</label>
+              <label className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-2">
+                <span className="text-emerald-500 text-sm">🏋️‍♂️</span> Añadir Ejercicio Principal
+              </label>
               <select value={ejercicioSeleccionado} onChange={(e) => setEjercicioSeleccionado(e.target.value)} className="w-full bg-gray-900 text-white rounded-xl py-2 px-3 outline-none text-sm border border-gray-700">
                 {ejerciciosBD.map((ej, i) => <option key={i} value={ej}>{ej}</option>)}
               </select>

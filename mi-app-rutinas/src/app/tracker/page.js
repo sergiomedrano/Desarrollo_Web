@@ -12,20 +12,15 @@ function TrackerContenido() {
 
   // ESTADOS PARA EL MÓDULO DE MOVILIDAD
   const [faseActiva, setFaseActiva] = useState("movilidad"); 
-  const listaMovilidad = [
-    "Bander Pullover (Hombros y dorsales)",
-    "External Rotation Press (Rotadores de hombro)",
-    "Retracción escapular (Postura y estabilidad)",
-    "Lat Stretch Row (Estiramiento de dorsales)"
-  ];
-  const [checksMovilidad, setChecksMovilidad] = useState(new Array(listaMovilidad.length).fill(false));
+  const [listaMovilidad, setListaMovilidad] = useState([]);
+  const [checksMovilidad, setChecksMovilidad] = useState([]);
 
   const toggleCheckMovilidad = (index) => {
     const nuevosChecks = [...checksMovilidad];
     nuevosChecks[index] = !nuevosChecks[index];
     setChecksMovilidad(nuevosChecks);
   };
-  const movilidadCompleta = checksMovilidad.every(Boolean);
+  const movilidadCompleta = checksMovilidad.length > 0 ? checksMovilidad.every(Boolean) : true;
 
   // ESTADOS DEL ENTRENAMIENTO
   const [ejerciciosBD, setEjerciciosBD] = useState([]);
@@ -52,6 +47,17 @@ function TrackerContenido() {
               const data = docSnap.data();
               setNombreRutinaActiva(data.nombre);
               
+              // Cargar Movilidad Específica
+              if (data.movilidad && data.movilidad.length > 0) {
+                setListaMovilidad(data.movilidad);
+                setChecksMovilidad(new Array(data.movilidad.length).fill(false));
+                setFaseActiva("movilidad");
+              } else {
+                // Si la rutina no tiene movilidad, saltamos directo a los fierros
+                setFaseActiva("entrenamiento");
+              }
+
+              // Cargar Bloques de Entrenamiento
               const bloquesArmados = data.ejercicios.map((ejObj, idx) => {
                 const isString = typeof ejObj === 'string';
                 return {
@@ -65,6 +71,8 @@ function TrackerContenido() {
               setEntrenamiento(bloquesArmados);
             }
           } else {
+            // Entrenamiento Libre (Se salta la movilidad)
+            setFaseActiva("entrenamiento");
             setEntrenamiento([{ id: "b1", ejercicio: lista[0] || "", descansoPersonalizado: 90, notas: "", series: [{ id: 1, kg: 0, reps: 0, completada: false }] }]);
           }
         } catch (error) { console.error("Error al cargar:", error); }
@@ -89,19 +97,15 @@ function TrackerContenido() {
   const eliminarSerie = (idB, idS) => setEntrenamiento(entrenamiento.map(b => b.id === idB ? { ...b, series: b.series.filter(s => s.id !== idS) } : b));
   const actualizarValor = (idB, idS, campo, val) => setEntrenamiento(entrenamiento.map(b => b.id === idB ? { ...b, series: b.series.map(s => s.id === idS ? { ...s, [campo]: Number(val) } : s) } : b));
   
-  // FUNCION CLAVE: Completar serie y reiniciar temporizador con el tiempo específico
   const completarSerie = (idBloque, idSerie, tiempoDescansoBloque) => {
     setEntrenamiento(entrenamiento.map(b => {
       if (b.id === idBloque) {
         const nuevasSeries = b.series.map(s => s.id === idSerie ? { ...s, completada: !s.completada } : s);
-        
-        // Verificamos si la serie acaba de ser marcada como completada (true)
         const serieCompletada = nuevasSeries.find(s => s.id === idSerie).completada;
         if (serieCompletada) {
           setTiempoDescanso(tiempoDescansoBloque || 90);
           setDescansoActivo(true);
         }
-        
         return { ...b, series: nuevasSeries };
       }
       return b;
@@ -138,15 +142,15 @@ function TrackerContenido() {
   const formatoTiempo = (s) => `${Math.floor(s / 60)}:${s % 60 < 10 ? '0' : ''}${s % 60}`;
 
   // RENDERIZADO: PANTALLA DE MOVILIDAD
-  if (faseActiva === "movilidad") {
+  if (faseActiva === "movilidad" && listaMovilidad.length > 0) {
     return (
       <div className="min-h-screen bg-gray-900 text-white flex flex-col font-sans p-6 animate-fade-in relative">
         <button onClick={() => router.push('/dashboard')} className="absolute top-6 right-6 text-gray-500 font-bold text-xl hover:text-white">✕</button>
         
         <div className="mt-12 mb-8">
-          <span className="text-emerald-500 font-bold tracking-widest text-xs uppercase">Paso 1</span>
-          <h2 className="text-4xl font-extrabold mt-2">Checklist de Movilidad</h2>
-          <p className="text-gray-400 mt-2">Lubrica tus articulaciones antes de cargar peso para rendir al máximo.</p>
+          <span className="text-emerald-500 font-bold tracking-widest text-xs uppercase">{nombreRutinaActiva}</span>
+          <h2 className="text-4xl font-extrabold mt-2">Movilidad</h2>
+          <p className="text-gray-400 mt-2">Checklist de calentamiento específico para tu sesión de hoy.</p>
         </div>
 
         <div className="flex-1 space-y-4">
