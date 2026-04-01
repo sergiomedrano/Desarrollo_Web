@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 html {
-  font-size: 12px;
+  font-size: 12px; 
 }
 
 :root {
@@ -27,4 +27,38 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* --- ESTILOS DEL CALENDARIO --- */
+.custom-calendar .react-calendar {
+  background: transparent !important;
+  border: none !important;
+  font-family: inherit !important;
+  width: 100%;
+}
+.custom-calendar .react-calendar__tile {
+  color: #d1d5db !important;
+  padding: 1rem 0.5rem !important;
+}
+.custom-calendar .react-calendar__tile--now {
+  background: #10b98120 !important;
+  border-radius: 12px;
+  color: #10b981 !important;
+  font-weight: bold;
+}
+.custom-calendar .react-calendar__tile--active {
+  background: #10b981 !important;
+  border-radius: 12px;
+  color: #064e3b !important;
+}
+.custom-calendar .react-calendar__navigation button {
+  color: #10b981 !important;
+  font-weight: bold;
+  font-size: 1.2rem;
+}
+.custom-calendar .react-calendar__month-view__weekdays__weekday {
+  text-decoration: none !important;
+  color: #6b7280 !important;
+  font-size: 0.7rem;
+  font-weight: bold;
 }
