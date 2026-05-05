@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { auth, db } from "../../firebase"; 
-import { collection, query, orderBy, getDocs, limit, doc, getDoc, setDoc, deleteDoc, addDoc, updateDoc } from "firebase/firestore";
+import { collection, query, orderBy, getDocs, doc, deleteDoc, addDoc, updateDoc } from "firebase/firestore";
 import { ComposedChart, Line, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
@@ -15,29 +15,34 @@ export default function Dashboard() {
   const [historial, setHistorial] = useState([]);
   const [agendados, setAgendados] = useState([]);
   const [cargandoDatos, setCargandoDatos] = useState(true);
-
-  // Perfil
-  const [perfil, setPerfil] = useState({ estatura: "176", peso: "96", objetivo: "Recomposición" });
-  const [editandoPerfil, setEditandoPerfil] = useState(false);
   
-  // Ejercicios
+  // ESTADOS: Control de Sesión en Pausa
+  const [sesionActiva, setSesionActiva] = useState(null);
+  const [tiempoTranscurrido, setTiempoTranscurrido] = useState(0);
+
+  // MANTENEDORES
   const [nuevoEjercicio, setNuevoEjercicio] = useState("");
   const [ejerciciosBD, setEjerciciosBD] = useState([]);
 
-  // Mantenedor de Rutinas
+  const [nuevoPasoMovilidadCat, setNuevoPasoMovilidadCat] = useState("");
+  const [movilidadBD, setMovilidadBD] = useState([]);
+
   const [rutinasBD, setRutinasBD] = useState([]);
   const [nuevaRutinaNombre, setNuevaRutinaNombre] = useState("");
+  
   const [ejerciciosParaNuevaRutina, setEjerciciosParaNuevaRutina] = useState([]);
   const [ejercicioSeleccionado, setEjercicioSeleccionado] = useState("");
   const [tiempoDescansoManual, setTiempoDescansoManual] = useState(90);
-  const [rutinaEnEdicionId, setRutinaEnEdicionId] = useState(null);
-  const [nuevoPasoMovilidad, setNuevoPasoMovilidad] = useState("");
+  const [numeroSeriesManual, setNumeroSeriesManual] = useState(3);
+  const [notaObjetivoManual, setNotaObjetivoManual] = useState(""); 
+
   const [pasosMovilidadRutina, setPasosMovilidadRutina] = useState([]);
+  const [movilidadSeleccionada, setMovilidadSeleccionada] = useState("");
+  const [notaMovilidadManual, setNotaMovilidadManual] = useState(""); 
 
-  // Gráficas
+  const [rutinaEnEdicionId, setRutinaEnEdicionId] = useState(null);
+
   const [ejercicioGrafica, setEjercicioGrafica] = useState("");
-
-  // Calendario
   const [fechaSeleccionada, setFechaSeleccionada] = useState(new Date());
   const [mostrarModalAgendar, setMostrarModalAgendar] = useState(false);
   const [rutinaParaAgendar, setRutinaParaAgendar] = useState("");
@@ -48,13 +53,11 @@ export default function Dashboard() {
       if (!usuario) return setCargandoDatos(false);
 
       try {
-        // Cargar Historial
         const qSesiones = query(collection(db, "Usuarios", usuario.uid, "Sesiones"), orderBy("fecha", "desc"));
         const snapSesiones = await getDocs(qSesiones);
         const datosHistorial = snapSesiones.docs.map(d => ({ id: d.id, ...d.data() }));
         setHistorial(datosHistorial);
 
-        // Cargar Agenda
         const qAgenda = query(collection(db, "Usuarios", usuario.uid, "Agenda"));
         const snapAgenda = await getDocs(qAgenda);
         setAgendados(snapAgenda.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -64,16 +67,17 @@ export default function Dashboard() {
           if (ejerciciosRealizados.length > 0 && !ejercicioGrafica) setEjercicioGrafica(ejerciciosRealizados[0]);
         }
         
-        if (pestañaActiva === "perfil") {
-          const docSnap = await getDoc(doc(db, "Usuarios", usuario.uid));
-          if (docSnap.exists() && docSnap.data().perfil) setPerfil(docSnap.data().perfil);
-        }
-
         const qEjercicios = query(collection(db, "Usuarios", usuario.uid, "Ejercicios"), orderBy("nombre", "asc"));
         const snapEjercicios = await getDocs(qEjercicios);
         const listaEjercicios = snapEjercicios.docs.map(d => d.data().nombre);
         setEjerciciosBD(listaEjercicios);
         if (listaEjercicios.length > 0 && !ejercicioSeleccionado) setEjercicioSeleccionado(listaEjercicios[0]);
+
+        const qMovilidad = query(collection(db, "Usuarios", usuario.uid, "Movilidad"), orderBy("nombre", "asc"));
+        const snapMovilidad = await getDocs(qMovilidad);
+        const listaMovilidad = snapMovilidad.docs.map(d => d.data().nombre);
+        setMovilidadBD(listaMovilidad);
+        if (listaMovilidad.length > 0 && !movilidadSeleccionada) setMovilidadSeleccionada(listaMovilidad[0]);
 
         const qRutinas = query(collection(db, "Usuarios", usuario.uid, "Rutinas"), orderBy("nombre", "asc"));
         const snapRutinas = await getDocs(qRutinas);
@@ -87,7 +91,57 @@ export default function Dashboard() {
     obtenerDatos();
   }, [pestañaActiva, ejercicioGrafica, rutinaParaAgendar]);
 
-  // PREPARACIÓN DE DATOS PARA GRÁFICA COMBINADA
+  // CARGAR SESIÓN EN PAUSA
+  useEffect(() => {
+    const savedStr = localStorage.getItem('trackerFit_activeSession');
+    if (savedStr) {
+      setSesionActiva(JSON.parse(savedStr));
+    } else {
+      setSesionActiva(null);
+    }
+  }, [pestañaActiva]);
+
+  useEffect(() => {
+    if (!sesionActiva) return;
+    setTiempoTranscurrido(Math.floor((Date.now() - sesionActiva.inicioEntrenamiento) / 1000));
+    
+    const interval = setInterval(() => {
+      setTiempoTranscurrido(Math.floor((Date.now() - sesionActiva.inicioEntrenamiento) / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [sesionActiva]);
+
+  const continuarSesionActiva = () => router.push('/tracker');
+
+  const descartarSesionActiva = (e) => {
+    e.stopPropagation(); 
+    if(window.confirm("🚨 ¿Estás seguro de que quieres descartar el entrenamiento en curso? Se perderá el progreso.")) {
+      localStorage.removeItem('trackerFit_activeSession');
+      setSesionActiva(null);
+    }
+  };
+
+  // LÓGICA: Determinar el ejercicio actual en progreso
+  let textoEjercicioEnCurso = "";
+  if (sesionActiva) {
+    if (sesionActiva.faseActiva === "movilidad") {
+      const idx = sesionActiva.checksMovilidad?.findIndex(c => c === false);
+      if (idx !== undefined && idx !== -1 && sesionActiva.listaMovilidad) {
+        const item = sesionActiva.listaMovilidad[idx];
+        textoEjercicioEnCurso = "🧘‍♂️ " + (typeof item === 'string' ? item : item.nombre);
+      } else {
+        textoEjercicioEnCurso = "🧘‍♂️ Movilidad completada";
+      }
+    } else {
+      const bloqueActivo = sesionActiva.entrenamiento?.find(b => b.series.some(s => !s.completada));
+      if (bloqueActivo) {
+        textoEjercicioEnCurso = "🏋️‍♂️ " + bloqueActivo.ejercicio;
+      } else {
+        textoEjercicioEnCurso = "✅ ¡Todo listo para finalizar!";
+      }
+    }
+  }
+
   const datosGraficaDinamica = historial.slice().reverse().map(sesion => {
     if (!sesion.ejercicios_realizados) return null;
     const ejercicioEnSesion = sesion.ejercicios_realizados.find(e => e.ejercicio === ejercicioGrafica);
@@ -108,12 +162,6 @@ export default function Dashboard() {
 
   const ejerciciosParaGraficar = [...new Set(historial.flatMap(s => s.ejercicios_realizados ? s.ejercicios_realizados.map(e => e.ejercicio) : []))];
 
-  // FUNCIONES BÁSICAS
-  const guardarPerfil = async () => {
-    await setDoc(doc(db, "Usuarios", auth.currentUser.uid), { perfil }, { merge: true });
-    setEditandoPerfil(false);
-  };
-
   const eliminarSesion = async (id) => {
     if (!window.confirm("¿Borrar entrenamiento?")) return;
     await deleteDoc(doc(db, "Usuarios", auth.currentUser.uid, "Sesiones", id));
@@ -125,22 +173,45 @@ export default function Dashboard() {
     await addDoc(collection(db, "Usuarios", auth.currentUser.uid, "Ejercicios"), { nombre: nuevoEjercicio });
     const qEjercicios = query(collection(db, "Usuarios", auth.currentUser.uid, "Ejercicios"), orderBy("nombre", "asc"));
     const snapEjercicios = await getDocs(qEjercicios);
-    setEjerciciosBD(snapEjercicios.docs.map(d => d.data().nombre));
+    const listaEjercicios = snapEjercicios.docs.map(d => d.data().nombre);
+    setEjerciciosBD(listaEjercicios);
+    setEjercicioSeleccionado(nuevoEjercicio);
     setNuevoEjercicio("");
   };
 
-  // FUNCIONES DE RUTINA Y MOVILIDAD
-  const agregarPasoMovilidad = () => {
-    if (nuevoPasoMovilidad.trim()) {
-      setPasosMovilidadRutina([...pasosMovilidadRutina, nuevoPasoMovilidad.trim()]);
-      setNuevoPasoMovilidad("");
+  const agregarMovilidadDB = async () => {
+    if (!nuevoPasoMovilidadCat.trim()) return;
+    await addDoc(collection(db, "Usuarios", auth.currentUser.uid, "Movilidad"), { nombre: nuevoPasoMovilidadCat });
+    const qMovilidad = query(collection(db, "Usuarios", auth.currentUser.uid, "Movilidad"), orderBy("nombre", "asc"));
+    const snapMovilidad = await getDocs(qMovilidad);
+    const listaMovilidad = snapMovilidad.docs.map(d => d.data().nombre);
+    setMovilidadBD(listaMovilidad);
+    setMovilidadSeleccionada(nuevoPasoMovilidadCat);
+    setNuevoPasoMovilidadCat("");
+  };
+
+  const agregarPasoMovilidadARutina = () => {
+    if (movilidadSeleccionada) {
+      setPasosMovilidadRutina([...pasosMovilidadRutina, {
+        nombre: movilidadSeleccionada,
+        nota: notaMovilidadManual
+      }]);
+      setNotaMovilidadManual(""); 
     }
   };
 
   const removerPasoMovilidad = (idx) => setPasosMovilidadRutina(pasosMovilidadRutina.filter((_, i) => i !== idx));
   
   const agregarEjercicioAPlantilla = () => {
-    if (ejercicioSeleccionado) setEjerciciosParaNuevaRutina([...ejerciciosParaNuevaRutina, { nombre: ejercicioSeleccionado, descanso: tiempoDescansoManual }]);
+    if (ejercicioSeleccionado) {
+      setEjerciciosParaNuevaRutina([...ejerciciosParaNuevaRutina, { 
+        nombre: ejercicioSeleccionado, 
+        descanso: tiempoDescansoManual,
+        series: numeroSeriesManual,
+        notaObjetivo: notaObjetivoManual
+      }]);
+      setNotaObjetivoManual(""); 
+    }
   };
 
   const removerEjercicioDePlantilla = (idx) => setEjerciciosParaNuevaRutina(ejerciciosParaNuevaRutina.filter((_, i) => i !== idx));
@@ -148,15 +219,24 @@ export default function Dashboard() {
   const editarRutina = (rutina) => {
     setRutinaEnEdicionId(rutina.id);
     setNuevaRutinaNombre(rutina.nombre);
-    setPasosMovilidadRutina(rutina.movilidad || []);
-    const ejerciciosNormalizados = rutina.ejercicios.map(ej => typeof ej === 'string' ? { nombre: ej, descanso: 90 } : ej);
+    
+    const movilidadNormalizada = (rutina.movilidad || []).map(mov => {
+      if (typeof mov === 'string') return { nombre: mov, nota: "" };
+      return mov;
+    });
+    setPasosMovilidadRutina(movilidadNormalizada);
+
+    const ejerciciosNormalizados = rutina.ejercicios.map(ej => {
+      if (typeof ej === 'string') return { nombre: ej, descanso: 90, series: 3, notaObjetivo: "" };
+      return { ...ej, series: ej.series || 3, notaObjetivo: ej.notaObjetivo || "" };
+    });
     setEjerciciosParaNuevaRutina(ejerciciosNormalizados);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const cancelarEdicion = () => {
     setRutinaEnEdicionId(null); setNuevaRutinaNombre(""); setEjerciciosParaNuevaRutina([]);
-    setPasosMovilidadRutina([]); setTiempoDescansoManual(90); setNuevoPasoMovilidad("");
+    setPasosMovilidadRutina([]); setTiempoDescansoManual(90); setNumeroSeriesManual(3); setNotaObjetivoManual(""); setNotaMovilidadManual("");
   };
 
   const guardarRutina = async () => {
@@ -165,10 +245,10 @@ export default function Dashboard() {
     try {
       if (rutinaEnEdicionId) {
         await updateDoc(doc(db, "Usuarios", auth.currentUser.uid, "Rutinas", rutinaEnEdicionId), nuevaData);
-        setRutinasBD(rutinasBD.map(r => r.id === rutinaEnEdicionId ? { id: rutinaEnEdicionId, ...nuevaData } : r));
+        setRutinasBD(rutinasBD.map(r => r.id === rutinaEnEdicionId ? { id: rutinaEnEdicionId, ...nuevaData } : r).sort((a, b) => a.nombre.localeCompare(b.nombre)));
       } else {
         const docRef = await addDoc(collection(db, "Usuarios", auth.currentUser.uid, "Rutinas"), nuevaData);
-        setRutinasBD([...rutinasBD, { id: docRef.id, ...nuevaData }]);
+        setRutinasBD([...rutinasBD, { id: docRef.id, ...nuevaData }].sort((a, b) => a.nombre.localeCompare(b.nombre)));
       }
       cancelarEdicion(); 
     } catch (error) { alert("Hubo un error al guardar."); }
@@ -181,7 +261,6 @@ export default function Dashboard() {
     if (rutinaEnEdicionId === id) cancelarEdicion();
   };
 
-  // FUNCIONES CALENDARIO
   const agendarSesion = async () => {
     const usuario = auth.currentUser;
     if (!usuario || !rutinaParaAgendar) return;
@@ -217,7 +296,6 @@ export default function Dashboard() {
     router.push("/");
   };
 
-  // Función para formatear el tiempo en el historial
   const formatoDuracionHistorial = (segundos) => {
     if (!segundos) return null;
     const h = Math.floor(segundos / 3600);
@@ -227,8 +305,16 @@ export default function Dashboard() {
     return `⏱ ${m}m ${s}s`;
   };
 
+  const formatoTiempoDinamico = (segundosTotales) => {
+    const horas = Math.floor(segundosTotales / 3600);
+    const minutos = Math.floor((segundosTotales % 3600) / 60);
+    const segundos = segundosTotales % 60;
+    if (horas > 0) return `${horas}:${minutos < 10 ? '0' : ''}${minutos}:${segundos < 10 ? '0' : ''}${segundos}`;
+    return `${minutos}:${segundos < 10 ? '0' : ''}${segundos}`;
+  };
+
   return (
-    <main className="min-h-screen bg-gray-900 text-white pb-24 font-sans">
+    <main className="min-h-screen bg-gray-900 text-white pb-40 font-sans relative">
       
       {/* ---------------- PESTAÑA: HOY ---------------- */}
       {pestañaActiva === "hoy" && (
@@ -369,28 +455,10 @@ export default function Dashboard() {
       {/* ---------------- PESTAÑA: PERFIL ---------------- */}
       {pestañaActiva === "perfil" && (
         <div className="p-6 space-y-6 animate-fade-in">
-          <div className="flex justify-between items-center mb-2">
-            <h2 className="text-2xl font-bold text-white">Mi Perfil</h2>
-            {!editandoPerfil ? (
-              <button onClick={() => setEditandoPerfil(true)} className="text-emerald-400 text-sm font-bold px-3 py-1 bg-emerald-400/10 rounded-lg hover:bg-emerald-400/20">Editar</button>
-            ) : (
-              <div className="flex gap-2">
-                <button onClick={() => setEditandoPerfil(false)} className="text-gray-400 text-sm font-bold px-3 py-1 bg-gray-800 rounded-lg hover:bg-gray-700">Cancelar</button>
-                <button onClick={guardarPerfil} className="text-gray-900 text-sm font-bold px-3 py-1 bg-emerald-500 rounded-lg hover:bg-emerald-400">Guardar</button>
-              </div>
-            )}
-          </div>
           
-          <div className="bg-gray-800 p-5 rounded-2xl border border-gray-700">
-            <h3 className="text-sm uppercase text-gray-400 font-bold mb-4">Tus Datos</h3>
-            <div className="space-y-4">
-              <div className="flex justify-between items-center border-b border-gray-700 pb-3">
-                <span className="text-gray-300">Peso Base</span>
-                {editandoPerfil ? <input type="number" value={perfil.peso} onChange={(e) => setPerfil({...perfil, peso: e.target.value})} className="w-20 bg-gray-900 text-white text-right rounded-lg py-1 px-2" /> : <span className="font-bold">{perfil.peso} kg</span>}
-              </div>
-            </div>
-          </div>
+          <h2 className="text-2xl font-bold text-white mb-2">Mi Perfil</h2>
 
+          {/* CATÁLOGO DE PESAS */}
           <div className="bg-gray-800 p-5 rounded-2xl border border-gray-700">
             <h3 className="text-sm uppercase text-emerald-400 font-bold mb-2">1. Base de Ejercicios</h3>
             <div className="flex gap-2">
@@ -399,27 +467,51 @@ export default function Dashboard() {
             </div>
           </div>
 
+          {/* CATÁLOGO DE MOVILIDAD */}
+          <div className="bg-gray-800 p-5 rounded-2xl border border-gray-700">
+            <h3 className="text-sm uppercase text-emerald-400 font-bold mb-2">2. Base de Movilidad</h3>
+            <div className="flex gap-2">
+              <input type="text" placeholder="Ej. Dislocaciones de hombro" value={nuevoPasoMovilidadCat} onChange={(e) => setNuevoPasoMovilidadCat(e.target.value)} className="flex-1 bg-gray-900 text-white rounded-xl py-2 px-3 outline-none text-sm"/>
+              <button onClick={agregarMovilidadDB} disabled={!nuevoPasoMovilidadCat.trim()} className="bg-emerald-500 text-gray-900 font-bold px-4 py-2 rounded-xl">+</button>
+            </div>
+          </div>
+
+          {/* CREADOR DE RUTINAS */}
           <div className={`bg-gray-800 p-5 rounded-2xl border ${rutinaEnEdicionId ? 'border-amber-500/50' : 'border-emerald-500/30'} transition-colors`}>
             <h3 className={`text-sm uppercase font-bold mb-4 tracking-widest ${rutinaEnEdicionId ? 'text-amber-400' : 'text-emerald-400'}`}>
-              {rutinaEnEdicionId ? "Editando Rutina" : "2. Armar Bloque"}
+              {rutinaEnEdicionId ? "Editando Rutina" : "3. Armar Rutina"}
             </h3>
             
             <input type="text" placeholder="Nombre de la Rutina" value={nuevaRutinaNombre} onChange={(e) => setNuevaRutinaNombre(e.target.value)} className="w-full bg-gray-900 text-white rounded-xl py-3 px-4 outline-none text-sm mb-6 border border-gray-700 focus:ring-1 focus:ring-emerald-500"/>
             
-            {/* SECCIÓN DE MOVILIDAD */}
             <div className="space-y-3 p-4 bg-gray-900/30 rounded-2xl border border-dashed border-gray-600 mb-6">
               <label className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-2">
-                <span className="text-emerald-500 text-sm">🧘‍♂️</span> Añadir Paso de Movilidad (Opcional)
+                <span className="text-emerald-500 text-sm">🧘‍♂️</span> Añadir Movilidad
               </label>
+              
+              <select value={movilidadSeleccionada} onChange={(e) => setMovilidadSeleccionada(e.target.value)} className="w-full bg-gray-900 text-white rounded-xl py-2 px-3 outline-none text-sm border border-gray-700 mb-2">
+                {movilidadBD.map((mov, i) => <option key={i} value={mov}>{mov}</option>)}
+              </select>
+              
               <div className="flex gap-2">
-                <input type="text" placeholder="Ej. Dislocaciones de hombro" value={nuevoPasoMovilidad} onChange={(e) => setNuevoPasoMovilidad(e.target.value)} className="flex-1 bg-gray-900 text-white rounded-xl py-2 px-3 outline-none text-sm border border-gray-700"/>
-                <button onClick={agregarPasoMovilidad} className="bg-gray-700 text-white font-bold px-4 py-2 rounded-xl text-sm hover:bg-gray-600 transition-colors">Añadir</button>
+                <input 
+                  type="text" 
+                  placeholder="Nota (ej. 3x10 por lado)" 
+                  value={notaMovilidadManual} 
+                  onChange={(e) => setNotaMovilidadManual(e.target.value)} 
+                  className="flex-1 bg-gray-900 text-gray-300 text-xs rounded-xl py-2 px-3 outline-none border border-gray-700"
+                />
+                <button onClick={agregarPasoMovilidadARutina} className="bg-gray-700 text-white font-bold px-4 py-2 rounded-xl text-sm hover:bg-gray-600 transition-colors">Añadir</button>
               </div>
+
               {pasosMovilidadRutina.length > 0 && (
                 <div className="mt-3 space-y-2">
                   {pasosMovilidadRutina.map((paso, idx) => (
                     <div key={idx} className="flex justify-between items-center bg-gray-800 p-2 rounded-lg border border-gray-700 text-xs text-gray-300">
-                      <span><span className="text-emerald-500 font-bold mr-2">✓</span> {paso}</span>
+                      <div>
+                        <span><span className="text-emerald-500 font-bold mr-2">✓</span> {typeof paso === 'string' ? paso : paso.nombre}</span>
+                        {paso.nota && <p className="text-[10px] text-gray-500 italic ml-6 mt-1">"{paso.nota}"</p>}
+                      </div>
                       <button onClick={() => removerPasoMovilidad(idx)} className="text-red-500 hover:text-red-400 font-bold px-2 py-1">✕</button>
                     </div>
                   ))}
@@ -427,18 +519,35 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* SECCIÓN DE EJERCICIOS (PESAS) */}
             <div className="space-y-3 p-4 bg-gray-900/50 rounded-2xl border border-gray-700 mb-4">
               <label className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-2">
                 <span className="text-emerald-500 text-sm">🏋️‍♂️</span> Añadir Ejercicio Principal
               </label>
-              <select value={ejercicioSeleccionado} onChange={(e) => setEjercicioSeleccionado(e.target.value)} className="w-full bg-gray-900 text-white rounded-xl py-2 px-3 outline-none text-sm border border-gray-700">
+              
+              <select value={ejercicioSeleccionado} onChange={(e) => setEjercicioSeleccionado(e.target.value)} className="w-full bg-gray-900 text-white rounded-xl py-2 px-3 outline-none text-sm border border-gray-700 mb-2">
                 {ejerciciosBD.map((ej, i) => <option key={i} value={ej}>{ej}</option>)}
               </select>
+              
+              <div className="flex gap-2 mb-2">
+                <input 
+                  type="text" 
+                  placeholder="Nota u Objetivo (ej. 6-9 reps RIR 2)" 
+                  value={notaObjetivoManual} 
+                  onChange={(e) => setNotaObjetivoManual(e.target.value)} 
+                  className="w-full bg-gray-900 text-gray-300 text-xs rounded-lg py-2 px-3 outline-none border border-gray-700" 
+                />
+              </div>
+
               <div className="flex items-center gap-3">
-                <input type="number" value={tiempoDescansoManual} onChange={(e) => setTiempoDescansoManual(Number(e.target.value))} className="w-20 bg-gray-900 text-emerald-400 font-bold rounded-lg py-2 text-center outline-none border border-gray-700" />
-                <span className="text-xs text-gray-500">segundos de descanso</span>
-                <button onClick={agregarEjercicioAPlantilla} className="ml-auto bg-gray-700 text-white font-bold px-4 py-2 rounded-xl text-sm hover:bg-gray-600 transition-colors">Añadir</button>
+                <div className="flex flex-col items-center">
+                  <span className="text-[10px] text-gray-500 uppercase font-bold mb-1">Series</span>
+                  <input type="number" value={numeroSeriesManual} onChange={(e) => setNumeroSeriesManual(Number(e.target.value))} className="w-16 bg-gray-900 text-white font-bold rounded-lg py-2 text-center outline-none border border-gray-700" />
+                </div>
+                <div className="flex flex-col items-center">
+                  <span className="text-[10px] text-gray-500 uppercase font-bold mb-1">Desc. (s)</span>
+                  <input type="number" value={tiempoDescansoManual} onChange={(e) => setTiempoDescansoManual(Number(e.target.value))} className="w-16 bg-gray-900 text-emerald-400 font-bold rounded-lg py-2 text-center outline-none border border-gray-700" />
+                </div>
+                <button onClick={agregarEjercicioAPlantilla} className="ml-auto bg-emerald-500 text-gray-900 font-bold px-4 py-2 mt-4 rounded-xl text-sm hover:bg-emerald-400 transition-colors">Añadir</button>
               </div>
             </div>
 
@@ -448,7 +557,11 @@ export default function Dashboard() {
                   <div key={idx} className="flex justify-between items-center bg-gray-900 p-3 rounded-xl border border-gray-700">
                     <div>
                       <p className="text-sm font-bold text-white flex items-center gap-2"><span className="text-emerald-500">{idx + 1}.</span> {typeof ej === 'string' ? ej : ej.nombre}</p>
-                      <p className="text-[10px] text-emerald-500 font-mono mt-1 ml-5">Descanso: {typeof ej === 'string' ? 90 : ej.descanso}s</p>
+                      {ej.notaObjetivo && <p className="text-[10px] text-gray-400 italic mt-1 ml-5">"{ej.notaObjetivo}"</p>}
+                      <div className="flex gap-4 mt-1 ml-5">
+                        <p className="text-[10px] text-gray-500 font-mono">Series: {typeof ej === 'string' ? 3 : (ej.series || 3)}</p>
+                        <p className="text-[10px] text-emerald-500 font-mono">Descanso: {typeof ej === 'string' ? 90 : ej.descanso}s</p>
+                      </div>
                     </div>
                     <button onClick={() => removerEjercicioDePlantilla(idx)} className="text-red-500 hover:text-red-400 font-bold px-3 py-1">✕</button>
                   </div>
@@ -482,13 +595,40 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* MENÚ DE NAVEGACIÓN INFERIOR */}
-      <nav className="fixed bottom-0 w-full bg-gray-900 border-t border-gray-800 flex justify-around p-3 pb-6 z-50">
-        <button onClick={() => setPestañaActiva("hoy")} className={`flex flex-col items-center gap-1 p-2 w-20 transition-colors ${pestañaActiva === "hoy" ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"}`}><span className="text-2xl">🔥</span><span className="text-[10px] font-bold uppercase">Hoy</span></button>
-        <button onClick={() => setPestañaActiva("calendario")} className={`flex flex-col items-center gap-1 p-2 w-20 transition-colors ${pestañaActiva === "calendario" ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"}`}><span className="text-2xl">📅</span><span className="text-[10px] font-bold uppercase">Agenda</span></button>
-        <button onClick={() => setPestañaActiva("progreso")} className={`flex flex-col items-center gap-1 p-2 w-20 transition-colors ${pestañaActiva === "progreso" ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"}`}><span className="text-2xl">📈</span><span className="text-[10px] font-bold uppercase">Progreso</span></button>
-        <button onClick={() => setPestañaActiva("perfil")} className={`flex flex-col items-center gap-1 p-2 w-20 transition-colors ${pestañaActiva === "perfil" ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"}`}><span className="text-2xl">⚙️</span><span className="text-[10px] font-bold uppercase">Perfil</span></button>
-      </nav>
+      {/* FOOTER AGRUPADO: MINI-REPRODUCTOR Y NAVEGACIÓN */}
+      <div className="fixed bottom-0 w-full z-50">
+        {sesionActiva && (
+          <div className="px-4 pb-3 animate-fade-in pointer-events-none">
+            <div className="bg-gray-800 p-3 rounded-2xl border border-emerald-500/30 shadow-[0_10px_25px_rgba(16,185,129,0.15)] flex items-center justify-between cursor-pointer hover:bg-gray-700 transition-colors pointer-events-auto" onClick={continuarSesionActiva}>
+              <div className="flex-1 overflow-hidden pr-2">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse flex-shrink-0"></span>
+                  <p className="text-sm font-bold text-white truncate">{sesionActiva.nombreRutinaActiva}</p>
+                </div>
+                <p className="text-xs text-emerald-400 truncate pr-4">{textoEjercicioEnCurso}</p>
+              </div>
+              
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-mono font-bold text-gray-300 bg-gray-900 px-2 py-1 rounded-lg border border-gray-700">
+                  {formatoTiempoDinamico(tiempoTranscurrido)}
+                </span>
+                <button onClick={(e) => { e.stopPropagation(); continuarSesionActiva(); }} className="w-10 h-10 flex-shrink-0 bg-emerald-500 text-gray-900 rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-transform">
+                  <svg className="w-5 h-5 ml-1" fill="currentColor" viewBox="0 0 20 20"><path d="M4 4l12 6-12 6z"></path></svg>
+                </button>
+                <button onClick={descartarSesionActiva} className="text-red-500/60 hover:text-red-500 font-bold p-2 text-xl transition-colors">✕</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MENÚ DE NAVEGACIÓN INFERIOR */}
+        <nav className="w-full bg-gray-900 border-t border-gray-800 flex justify-around p-3 pb-6 shadow-[0_-10px_30px_rgba(0,0,0,0.5)]">
+          <button onClick={() => setPestañaActiva("hoy")} className={`flex flex-col items-center gap-1 p-2 w-20 transition-colors ${pestañaActiva === "hoy" ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"}`}><span className="text-2xl">🔥</span><span className="text-[10px] font-bold uppercase">Hoy</span></button>
+          <button onClick={() => setPestañaActiva("calendario")} className={`flex flex-col items-center gap-1 p-2 w-20 transition-colors ${pestañaActiva === "calendario" ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"}`}><span className="text-2xl">📅</span><span className="text-[10px] font-bold uppercase">Agenda</span></button>
+          <button onClick={() => setPestañaActiva("progreso")} className={`flex flex-col items-center gap-1 p-2 w-20 transition-colors ${pestañaActiva === "progreso" ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"}`}><span className="text-2xl">📈</span><span className="text-[10px] font-bold uppercase">Progreso</span></button>
+          <button onClick={() => setPestañaActiva("perfil")} className={`flex flex-col items-center gap-1 p-2 w-20 transition-colors ${pestañaActiva === "perfil" ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"}`}><span className="text-2xl">⚙️</span><span className="text-[10px] font-bold uppercase">Perfil</span></button>
+        </nav>
+      </div>
     </main>
   );
 }

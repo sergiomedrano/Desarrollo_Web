@@ -1,0 +1,26 @@
+  const listaMovilidad = [
+    "Bander Pullover",
+    "External Rotation Press",
+    "Retracción escapular",
+    "Lat Stretch Row"
+  ];
+  
+  
+const qRutinas = query(collection(db, "Usuarios", usuario.uid, "Rutinas"), orderBy("nombre", "asc"));
+const snapRutinas = await getDocs(qRutinas);
+
+
+Mejoras:
+- Movimiento entre pestañas con el entrenamiento iniciado
+- No se pueden borrar ejercicios base
+
+
+Propuestas de mejoras:
+- comparativas
+- PRs personales
+- Calendario de entrenamientos
+
+
+Carrefour -> 29865 -> 18000
+Guerrin -> 44700 -> 27400
+total -> 90800 -> 45400/2 -> 22700
