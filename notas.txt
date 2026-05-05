@@ -19,8 +19,3 @@ Propuestas de mejoras:
 - comparativas
 - PRs personales
 - Calendario de entrenamientos
-
-
-Carrefour -> 29865 -> 18000
-Guerrin -> 44700 -> 27400
-total -> 90800 -> 45400/2 -> 22700

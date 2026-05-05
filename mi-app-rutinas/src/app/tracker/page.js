@@ -38,6 +38,8 @@ function TrackerContenido() {
   const [segundosDescanso, setSegundosDescanso] = useState(0);
   
   const [guardando, setGuardando] = useState(false);
+  // NUEVO ESTADO: Bandera para bloquear el autoguardado al finalizar
+  const [finalizado, setFinalizado] = useState(false); 
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (usuario) => {
@@ -114,9 +116,9 @@ function TrackerContenido() {
     }
   };
 
-  // AUTOGUARDADO
+  // AUTOGUARDADO (Bloqueado si está finalizado)
   useEffect(() => {
-    if (inicioEntrenamiento && !guardando && !sesionGuardada) {
+    if (inicioEntrenamiento && !guardando && !sesionGuardada && !finalizado) {
       const dataToSave = {
         planElegidoId,
         faseActiva,
@@ -130,57 +132,58 @@ function TrackerContenido() {
       };
       localStorage.setItem('trackerFit_activeSession', JSON.stringify(dataToSave));
     }
-  }, [faseActiva, listaMovilidad, checksMovilidad, entrenamiento, nombreRutinaActiva, inicioEntrenamiento, finDescanso, segundosDescanso, planElegidoId, guardando, sesionGuardada]);
+  }, [faseActiva, listaMovilidad, checksMovilidad, entrenamiento, nombreRutinaActiva, inicioEntrenamiento, finDescanso, segundosDescanso, planElegidoId, guardando, sesionGuardada, finalizado]);
 
   useEffect(() => {
     const handleBeforeUnload = (e) => {
-      if (inicioEntrenamiento && !guardando && !sesionGuardada) {
+      if (inicioEntrenamiento && !guardando && !sesionGuardada && !finalizado) {
         e.preventDefault();
         e.returnValue = ''; 
       }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [inicioEntrenamiento, guardando, sesionGuardada]);
+  }, [inicioEntrenamiento, guardando, sesionGuardada, finalizado]);
 
-  // BOTÓN "X" (Pausa / Salida Segura)
+  // BOTÓN "X"
   const salirDelEntrenamiento = () => {
     if (window.confirm("¿Seguro que quieres salir al menú principal?\n\nTu progreso se guardará automáticamente por si deseas retomarlo luego.")) {
       router.push('/dashboard');
     }
   };
 
-  // NUEVA FUNCIÓN: CANCELAR DEFINITIVAMENTE
+  // BOTÓN CANCELAR
   const cancelarEntrenamientoDefinitivo = () => {
     if (window.confirm("🚨 ¿Estás seguro de que quieres cancelar este entrenamiento?\n\nSe perderá todo el progreso actual y no se guardará en tu historial.")) {
+      setFinalizado(true); // Bloquea el autoguardado antes de salir
       localStorage.removeItem('trackerFit_activeSession');
       router.push('/dashboard');
     }
   };
 
   useEffect(() => {
-    if (!inicioEntrenamiento || sesionGuardada) return;
+    if (!inicioEntrenamiento || sesionGuardada || finalizado) return;
     const interval = setInterval(() => {
       setSegundosTranscurridos(Math.floor((Date.now() - inicioEntrenamiento) / 1000));
     }, 1000);
     return () => clearInterval(interval);
-  }, [inicioEntrenamiento, sesionGuardada]);
+  }, [inicioEntrenamiento, sesionGuardada, finalizado]);
 
   useEffect(() => {
-    if (!finDescanso || sesionGuardada) return;
+    if (!finDescanso || sesionGuardada || finalizado) return;
     const interval = setInterval(() => {
       const remaining = Math.floor((finDescanso - Date.now()) / 1000);
       if (remaining <= 0) {
         setFinDescanso(null);
         setSegundosDescanso(0);
         if ("vibrate" in navigator) navigator.vibrate([500, 200, 500]);
-        alert("¡Terminó tu descanso!");
+        alert("¡A los fierros! Termina tu descanso.");
       } else {
         setSegundosDescanso(remaining);
       }
     }, 1000);
     return () => clearInterval(interval);
-  }, [finDescanso, sesionGuardada]);
+  }, [finDescanso, sesionGuardada, finalizado]);
 
   const iniciarDescanso = (segundos) => {
     setFinDescanso(Date.now() + segundos * 1000);
@@ -246,7 +249,11 @@ function TrackerContenido() {
     const bloquesCompletados = entrenamiento.map(b => ({ ejercicio: b.ejercicio, series: b.series.filter(s => s.completada).map(s => ({ kg: s.kg, reps: s.reps })) })).filter(b => b.series.length > 0);
     if (bloquesCompletados.length === 0) return alert("No hay series completadas.");
 
+    // AQUÍ ESTÁ LA CORRECCIÓN: Activamos bandera, limpiamos cache DE INMEDIATO y guardamos
+    setFinalizado(true); 
     setGuardando(true);
+    localStorage.removeItem('trackerFit_activeSession');
+
     const tiempoTotalReal = Math.floor((Date.now() - inicioEntrenamiento) / 1000);
 
     try {
@@ -256,9 +263,12 @@ function TrackerContenido() {
         duracion_segundos: tiempoTotalReal,
         ejercicios_realizados: bloquesCompletados 
       });
-      localStorage.removeItem('trackerFit_activeSession');
       router.push('/dashboard'); 
-    } catch (error) { console.error(error); } finally { setGuardando(false); }
+    } catch (error) { 
+      console.error(error); 
+      setGuardando(false);
+      setFinalizado(false); // Si hay error, revertimos la bandera
+    } 
   };
 
   const formatoTiempoDinamico = (segundosTotales) => {
@@ -318,10 +328,9 @@ function TrackerContenido() {
           ))}
         </div>
         <div className="mt-8 space-y-4">
-          <button onClick={() => setFaseActiva("entrenamiento")} disabled={!movilidadCompleta} className="w-full bg-emerald-500 text-gray-900 font-bold py-5 rounded-2xl text-xl shadow-lg shadow-emerald-500/30 disabled:opacity-30 disabled:shadow-none transition-all active:scale-95">A ENTRENAR ➔</button>
+          <button onClick={() => setFaseActiva("entrenamiento")} disabled={!movilidadCompleta} className="w-full bg-emerald-500 text-gray-900 font-bold py-5 rounded-2xl text-xl shadow-lg shadow-emerald-500/30 disabled:opacity-30 disabled:shadow-none transition-all active:scale-95">A LOS FIERROS ➔</button>
           <button onClick={() => setFaseActiva("entrenamiento")} className="w-full text-center text-gray-500 text-sm font-bold hover:text-gray-400 py-2 transition-colors">Saltar calentamiento</button>
           
-          {/* BOTÓN CANCELAR EN MOVILIDAD */}
           <button onClick={cancelarEntrenamientoDefinitivo} className="w-full text-center text-red-500/60 text-sm font-bold hover:text-red-500/90 py-2 mt-4 transition-colors">
             Descartar Entrenamiento
           </button>
@@ -403,7 +412,6 @@ function TrackerContenido() {
         
         <button onClick={agregarNuevoBloque} className="w-full py-6 bg-gray-800 border-2 border-dashed border-emerald-500/50 text-emerald-400 font-bold rounded-3xl hover:bg-gray-700 transition-colors shadow-lg active:scale-95">+ SIGUIENTE EJERCICIO</button>
 
-        {/* BOTÓN CANCELAR EN ENTRENAMIENTO (Al fondo) */}
         <button onClick={cancelarEntrenamientoDefinitivo} className="w-full mt-4 py-4 text-red-500/60 font-bold rounded-3xl hover:bg-red-500/10 hover:text-red-500 transition-colors">
           Descartar Entrenamiento
         </button>
