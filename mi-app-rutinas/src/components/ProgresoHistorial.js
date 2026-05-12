@@ -16,7 +16,7 @@ export default function ProgresoHistorial({ historial }) {
     }));
   };
 
-  const historialAgrupado = historial.reduce((acc, sesion) => {
+  const historialAgrupado = (historial || []).reduce((acc, sesion) => {
     const fecha = sesion.fecha?.toDate() || new Date();
     const mesAnio = format(fecha, 'MMMM yyyy', { locale: es });
     if (!acc[mesAnio]) acc[mesAnio] = [];

@@ -25,7 +25,7 @@ export default function ProgresoGraficas({ historial }) {
   const [ejercicioGrafica, setEjercicioGrafica] = useState("");
   const [metrica, setMetrica] = useState("1rm"); 
 
-  const ejerciciosParaGraficar = [...new Set(historial.flatMap(s => s.ejercicios_realizados?.map(e => e.ejercicio) || []))];
+  const ejerciciosParaGraficar = [...new Set((historial || []).flatMap(s => s.ejercicios_realizados?.map(e => e.ejercicio) || []))];
   
   if (ejerciciosParaGraficar.length > 0 && !ejercicioGrafica) {
     setEjercicioGrafica(ejerciciosParaGraficar[0]);
