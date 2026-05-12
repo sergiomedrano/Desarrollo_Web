@@ -1,9 +1,9 @@
-"use client"; // <--- ESTA LÍNEA ES VITAL
+"use client";"use client";
 import { useState } from "react";
 import { ComposedChart, Line, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid } from 'recharts';
 import { format } from 'date-fns';
 
-// Componente para el Tooltip limpio y sin duplicidad
+// Componente para el Tooltip limpio
 const CustomTooltip = ({ active, payload, label, estiloActual }) => {
   if (active && payload && payload.length) {
     return (
@@ -64,7 +64,6 @@ export default function ProgresoGraficas({ historial }) {
     let max1RM = 0; let maxPeso = 0; let volumenSesion = 0;
 
     ej.series.forEach(s => {
-      // Fórmula de Brzycki: 1RM = Peso / (1.0278 - (0.0278 * Reps))
       const estimado = s.reps > 0 ? (s.kg / (1.0278 - (0.0278 * s.reps))) : 0;
       if (estimado > max1RM) max1RM = estimado;
       if (s.kg > maxPeso) maxPeso = s.kg;
@@ -106,8 +105,12 @@ export default function ProgresoGraficas({ historial }) {
         </div>
       </div>
 
-      <div className="h-80 bg-gray-800/30 rounded-3xl p-4 border border-gray-800 shadow-xl">
-        <ResponsiveContainer width="100%" height="100%">
+      {/* AQUÍ EL FIX: 
+          1. Añadimos minWidth={0} al ResponsiveContainer.
+          2. Aseguramos que el div padre tenga un ancho definido (w-full).
+      */}
+      <div className="h-80 w-full bg-gray-800/30 rounded-3xl p-4 border border-gray-800 shadow-xl overflow-hidden">
+        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
           <ComposedChart data={datosGrafica} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#374151" vertical={false} />
             <XAxis dataKey="fecha" stroke="#6b7280" fontSize={10} tickLine={false} axisLine={false} dy={10} />
